@@ -4,9 +4,24 @@ import PriceChart from "./components/PriceChart.jsx";
 import DensityPanel from "./components/DensityPanel.jsx";
 import ComparePanel from "./components/ComparePanel.jsx";
 import MLPanel from "./components/MLPanel.jsx";
+import SignalPanel from "./components/SignalPanel.jsx";
+import ScreenerPanel from "./components/ScreenerPanel.jsx";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h"];
-const SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "DOGE/USDT"];
+const SYMBOLS = [
+  "BTC/USDT",
+  "ETH/USDT",
+  "SOL/USDT",
+  "XRP/USDT",
+  "BNB/USDT",
+  "DOGE/USDT",
+  "ADA/USDT",
+  "AVAX/USDT",
+  "LINK/USDT",
+  "DOT/USDT",
+  "LTC/USDT",
+  "TRX/USDT",
+];
 
 export default function App() {
   const [cfg, setCfg] = useState(null);
@@ -19,6 +34,11 @@ export default function App() {
   const [compare, setCompare] = useState(null);
   const [status, setStatus] = useState(null);
   const [prediction, setPrediction] = useState(null);
+  const [signal, setSignal] = useState(null);
+  const [signalLoading, setSignalLoading] = useState(false);
+
+  const [trainAll, setTrainAll] = useState({});
+  const [trainingAll, setTrainingAll] = useState(false);
 
   const [training, setTraining] = useState(false);
   const [predicting, setPredicting] = useState(false);
@@ -75,28 +95,43 @@ export default function App() {
     }
   }, [symbol, exchange, timeframe]);
 
+  const loadSignal = useCallback(async () => {
+    try {
+      setSignalLoading(true);
+      const d = await api.signal({ symbol, exchange, timeframe });
+      setSignal(d);
+    } catch (e) {
+      setError(`signal: ${e.message}`);
+    } finally {
+      setSignalLoading(false);
+    }
+  }, [symbol, exchange, timeframe]);
+
   // Reload everything when the instrument changes.
   useEffect(() => {
     setError(null);
     setPrediction(null);
+    setSignal(null);
     loadCandles();
     loadOb();
     loadStatus();
-  }, [loadCandles, loadOb, loadStatus]);
+    loadSignal();
+  }, [loadCandles, loadOb, loadStatus, loadSignal]);
 
   useEffect(() => {
     if (cfg) loadCompare();
   }, [cfg, loadCompare]);
 
-  // Live polling of order book + comparison.
+  // Live polling of order book + comparison + trade signal.
   useEffect(() => {
     const id = setInterval(() => {
       if (!liveRef.current) return;
       loadOb();
       loadCompare();
+      loadSignal();
     }, 4000);
     return () => clearInterval(id);
-  }, [loadOb, loadCompare]);
+  }, [loadOb, loadCompare, loadSignal]);
 
   const onTrain = async ({ horizon, threshold }) => {
     setTraining(true);
@@ -106,7 +141,7 @@ export default function App() {
         symbol,
         exchange,
         timeframe,
-        history: cfg?.history_candles || 8000,
+        history: cfg?.history_candles || 16000,
         horizon,
         threshold,
       });
@@ -125,10 +160,33 @@ export default function App() {
     try {
       const d = await api.predict({ symbol, exchange, timeframe });
       setPrediction(d);
+      loadSignal();
     } catch (e) {
       setError(`predict: ${e.message}`);
     } finally {
       setPredicting(false);
+    }
+  };
+
+  const onTrainAll = async () => {
+    setTrainingAll(true);
+    setError(null);
+    try {
+      const d = await api.trainAll({
+        symbols: SYMBOLS,
+        exchange,
+        timeframe,
+        history: cfg?.history_candles || 16000,
+      });
+      const bySymbol = {};
+      for (const r of d.results) bySymbol[r.symbol] = r;
+      setTrainAll(bySymbol);
+      loadStatus();
+      loadSignal();
+    } catch (e) {
+      setError(`train-all: ${e.message}`);
+    } finally {
+      setTrainingAll(false);
     }
   };
 
@@ -178,6 +236,21 @@ export default function App() {
 
       {error && <div className="error">⚠ {error}</div>}
 
+      <div className="panel">
+        <h3>
+          <span>Multi-pair screener</span>
+          <span className="muted">train &amp; rank all pairs</span>
+        </h3>
+        <ScreenerPanel
+          symbols={SYMBOLS}
+          results={trainAll}
+          running={trainingAll}
+          onTrainAll={onTrainAll}
+          onSelect={setSymbol}
+          current={symbol}
+        />
+      </div>
+
       <div className="grid">
         <div className="col">
           <div className="panel">
@@ -209,6 +282,14 @@ export default function App() {
         </div>
 
         <div className="col">
+          <div className="panel">
+            <h3>
+              <span>Trade signal</span>
+              <span className="muted">entry · stop · target</span>
+            </h3>
+            <SignalPanel data={signal} loading={signalLoading} />
+          </div>
+
           <div className="panel">
             <h3>
               <span>Order-book density</span>

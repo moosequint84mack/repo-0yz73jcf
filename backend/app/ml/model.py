@@ -17,6 +17,7 @@ import numpy as np
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
+from ..backtest import run_backtest
 from ..config import settings
 from ..features import build_dataset, candles_to_df, compute_features
 
@@ -37,6 +38,7 @@ class TrainResult:
     threshold: float
     trained_at: float = field(default_factory=time.time)
     label_distribution: dict[str, int] = field(default_factory=dict)
+    backtest: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -84,7 +86,7 @@ class ModelStore:
         horizon: int = 12,
         threshold: float = 0.004,
     ) -> TrainedModel:
-        feats, labels, _df = build_dataset(candles, horizon=horizon, threshold=threshold)
+        feats, labels, df = build_dataset(candles, horizon=horizon, threshold=threshold)
         if len(feats) < 200:
             raise ValueError(
                 f"Not enough usable candles to train ({len(feats)} rows after cleaning). "
@@ -133,6 +135,18 @@ class ModelStore:
 
         y_pred = clf.predict(X_test)
         acc = float(accuracy_score(y_test, y_pred))
+
+        # Out-of-sample trade backtest: replay test-set predictions as bracket trades.
+        test_positions = feats.index.to_numpy()[split:]
+        proba_test = clf.predict_proba(X_test)
+        backtest = run_backtest(
+            df,
+            test_positions,
+            proba_test,
+            classes,
+            horizon=horizon,
+            threshold=threshold,
+        )
         report = classification_report(
             y_test,
             y_pred,
@@ -167,6 +181,7 @@ class ModelStore:
             horizon=horizon,
             threshold=threshold,
             label_distribution=label_dist,
+            backtest=backtest,
         )
         model = TrainedModel(
             clf=clf, feature_columns=feature_columns, result=result, key=key

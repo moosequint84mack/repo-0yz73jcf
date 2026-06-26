@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # Candle timeframe and history window used for ML training.
     timeframe: str = "5m"
-    history_candles: int = 8000  # ~1 month of 5m candles (~8640)
+    history_candles: int = 16000  # ~2 months of 5m candles for richer training
 
     # Density detection: a level is a "wall" if its size >= this many std devs
     # above the mean level size on its side of the book.

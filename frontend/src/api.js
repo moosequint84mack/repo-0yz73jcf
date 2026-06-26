@@ -44,6 +44,18 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  trainAll: (body) =>
+    req("/api/ml/train-all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  signal: (body) =>
+    req("/api/ml/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   status: (symbol, exchange, timeframe) =>
     req(
       `/api/ml/status?symbol=${encodeURIComponent(symbol)}&exchange=${exchange}&timeframe=${timeframe}`

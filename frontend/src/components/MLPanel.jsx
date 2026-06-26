@@ -177,6 +177,64 @@ export default function MLPanel({
             </div>
           </div>
 
+          {result.backtest && result.backtest.n_trades > 0 && (
+            <>
+              <h4 style={{ margin: "14px 0 4px", color: "var(--muted)", fontSize: 11 }}>
+                OUT-OF-SAMPLE BACKTEST (bracket trades on test set)
+              </h4>
+              <div className="chips" style={{ marginBottom: 12 }}>
+                <div className="chip">
+                  <div className="k">Trades</div>
+                  <div className="v">{result.backtest.n_trades}</div>
+                </div>
+                <div className="chip">
+                  <div className="k">Win-rate</div>
+                  <div
+                    className="v"
+                    style={{ color: result.backtest.win_rate >= 50 ? "var(--green)" : "var(--red)" }}
+                  >
+                    {result.backtest.win_rate?.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="chip">
+                  <div className="k">Profit factor</div>
+                  <div
+                    className="v"
+                    style={{
+                      color: result.backtest.profit_factor >= 1 ? "var(--green)" : "var(--red)",
+                    }}
+                  >
+                    {result.backtest.profit_factor?.toFixed(2)}
+                  </div>
+                </div>
+                <div className="chip">
+                  <div className="k">Expectancy</div>
+                  <div
+                    className="v"
+                    style={{
+                      color: result.backtest.expectancy_pct >= 0 ? "var(--green)" : "var(--red)",
+                      fontSize: 14,
+                    }}
+                  >
+                    {result.backtest.expectancy_pct?.toFixed(3)}%
+                  </div>
+                </div>
+                <div className="chip">
+                  <div className="k">Max drawdown</div>
+                  <div className="v red" style={{ fontSize: 14 }}>
+                    {result.backtest.max_drawdown_pct?.toFixed(2)}%
+                  </div>
+                </div>
+                <div className="chip">
+                  <div className="k">Sharpe-like</div>
+                  <div className="v" style={{ fontSize: 14 }}>
+                    {result.backtest.sharpe_like?.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           <LearningCurve curve={result.learning_curve} />
 
           <h4 style={{ margin: "14px 0 4px", color: "var(--muted)", fontSize: 11 }}>
