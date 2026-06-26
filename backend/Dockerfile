@@ -12,12 +12,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install dependencies first for better layer caching.
+# Copy project metadata and application code, then install.
 COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install .
-
-# Application code.
 COPY app ./app
+RUN pip install --upgrade pip && pip install .
 
 # Persisted models + SQLite live here (mount a volume in production).
 RUN mkdir -p /app/models /data
