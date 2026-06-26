@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+backend/models/*.joblib
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env / OS
+.env
+.DS_Store
