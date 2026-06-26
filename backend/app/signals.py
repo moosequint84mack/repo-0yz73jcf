@@ -184,8 +184,20 @@ def build_trade_signal(
     sup_dist = ((mid - support["price"]) / mid * 100) if support else None
     res_dist = ((resistance["price"] - mid) / mid * 100) if resistance else None
 
-    near_support = sup_dist is not None and 0 <= sup_dist <= proximity_pct
-    near_resistance = res_dist is not None and 0 <= res_dist <= proximity_pct
+    raw_near_support = sup_dist is not None and 0 <= sup_dist <= proximity_pct
+    raw_near_resistance = res_dist is not None and 0 <= res_dist <= proximity_pct
+
+    # Deterministic density edge: when price is sandwiched between a bid and an ask
+    # wall, the *nearer* wall is the one price is actually leaning on, so only it
+    # casts a directional vote. Naively counting both walls makes their votes
+    # cancel and the signal collapses to flat even on a clean bounce setup.
+    near_support = raw_near_support
+    near_resistance = raw_near_resistance
+    if raw_near_support and raw_near_resistance:
+        if sup_dist <= res_dist:
+            near_resistance = False
+        else:
+            near_support = False
 
     # ML directional bias.
     ml_dir = prediction.get("prediction") if prediction else None
@@ -232,9 +244,12 @@ def build_trade_signal(
         score -= 0.5
         rationale.append(f"Order-book imbalance {imbalance * 100:.0f}% favours asks.")
 
-    if score >= 1.5:
+    # A clean bounce off a density wall (score ±1.0) is itself a deterministic,
+    # verifiable edge — it no longer needs the ML model to agree before firing, so
+    # the screener actually surfaces LONG/SHORT setups instead of staying flat.
+    if score >= 1.0:
         action = "long"
-    elif score <= -1.5:
+    elif score <= -1.0:
         action = "short"
 
     # ---- Market-regime filter ------------------------------------------
@@ -301,13 +316,19 @@ def build_trade_signal(
     conviction = min(1.0, abs(score) / 3.0)
     confidence = round(0.5 * ml_conf + 0.5 * conviction, 4)
 
+    risk_pct = float(abs(entry - stop) / entry * 100)
+    reward_pct = float(reward / entry * 100)
     plan.update(
         {
             "entry": float(entry),
             "stop": float(stop),
             "target": float(target),
-            "risk_pct": float(abs(entry - stop) / entry * 100),
-            "reward_pct": float(reward / entry * 100),
+            "risk_pct": risk_pct,
+            "reward_pct": reward_pct,
+            # Plain-language, unambiguous restatement of the plan for the UI.
+            "direction": action,  # "long" | "short"
+            "expected_profit_pct": reward_pct,  # if the target is reached
+            "expected_loss_pct": risk_pct,  # if the stop is hit
             "risk_reward": float(rr) if rr is not None else None,
             "confidence": confidence,
             "support": support,

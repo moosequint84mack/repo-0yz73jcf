@@ -29,7 +29,7 @@ export default function Dashboard() {
   const [cfg, setCfg] = useState(null);
   const [symbol, setSymbol] = useState("BTC/USDT");
   const [exchange, setExchange] = useState("okx");
-  const [timeframe, setTimeframe] = useState("5m");
+  const [timeframe, setTimeframe] = useState("1h");
 
   const [candles, setCandles] = useState([]);
   const [ob, setOb] = useState(null);
@@ -164,7 +164,7 @@ export default function Dashboard() {
         symbol,
         exchange,
         timeframe,
-        history: cfg?.history_candles || 16000,
+        history: cfg?.history_candles || 4000,
         horizon,
         threshold,
       });
@@ -198,7 +198,7 @@ export default function Dashboard() {
         symbols: SYMBOLS,
         exchange,
         timeframe,
-        history: cfg?.history_candles || 16000,
+        history: cfg?.history_candles || 4000,
       });
       const bySymbol = {};
       for (const r of d.results) bySymbol[r.symbol] = r;

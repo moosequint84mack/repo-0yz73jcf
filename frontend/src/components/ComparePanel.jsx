@@ -34,6 +34,28 @@ export default function ComparePanel({ data }) {
           </div>
         </div>
       )}
+      {divergence && divergence.arb_net_pct != null && (
+        <div
+          className={"arb-line " + (divergence.arb_actionable ? "green" : "muted")}
+          style={{ marginBottom: 12, fontSize: 12 }}
+        >
+          <span className="k" style={{ fontWeight: 700, marginRight: 6 }}>
+            {t("compare.arbTitle")}:
+          </span>
+          {divergence.arb_actionable
+            ? t("compare.arbYes", {
+                buy: divergence.arb_buy,
+                sell: divergence.arb_sell,
+                net: divergence.arb_net_pct.toFixed(3),
+                gross: divergence.arb_gross_pct.toFixed(3),
+                fee: divergence.arb_fee_pct.toFixed(2),
+              })
+            : t("compare.arbNo", {
+                gross: divergence.arb_gross_pct.toFixed(3),
+                fee: divergence.arb_fee_pct.toFixed(2),
+              })}
+        </div>
+      )}
       <table>
         <thead>
           <tr>

@@ -262,6 +262,64 @@ tr:last-child td {
   color: var(--yellow);
   border: 1px solid var(--yellow);
 }
+/* Big direction headline + expected profit/risk boxes */
+.trade-headline {
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+.trade-headline.up {
+  background: rgba(22, 199, 132, 0.08);
+  border-color: rgba(22, 199, 132, 0.4);
+}
+.trade-headline.down {
+  background: rgba(234, 57, 67, 0.08);
+  border-color: rgba(234, 57, 67, 0.4);
+}
+.trade-headline.flat {
+  background: rgba(240, 185, 11, 0.06);
+  border-color: rgba(240, 185, 11, 0.3);
+}
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.result-box {
+  border-radius: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.result-box.green {
+  border-color: rgba(22, 199, 132, 0.4);
+}
+.result-box.red {
+  border-color: rgba(234, 57, 67, 0.4);
+}
+.result-box .k {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+.result-box .v {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.result-box.green .v {
+  color: var(--green);
+}
+.result-box.red .v {
+  color: var(--red);
+}
+.result-box .sub {
+  font-size: 11px;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
 .probs {
   flex: 1;
   display: flex;

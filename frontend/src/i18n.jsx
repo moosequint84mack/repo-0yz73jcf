@@ -75,6 +75,16 @@ const STRINGS = {
     "signal.modelAcc": "Точность модели {acc}%",
     "signal.noMlModel": "Модель не обучена для этой пары (сигнал только по плотности).",
     "signal.backtestWinrate": " · win-rate бэктеста {wr}% на {n} сделках",
+    "signal.action.long": "ЛОНГ — покупка",
+    "signal.action.short": "ШОРТ — продажа",
+    "signal.action.flat": "ВНЕ РЫНКА",
+    "signal.dirHint.long": "Покупка: вход у поддержки, прибыль при росте до цели.",
+    "signal.dirHint.short": "Продажа: вход у сопротивления, прибыль при падении до цели.",
+    "signal.expProfit": "Ожидаемая прибыль",
+    "signal.expRisk": "Риск (если стоп)",
+    "signal.atTarget": "при достижении цели",
+    "signal.atStop": "если сработает стоп",
+    "signal.withLev": "с плечом {lev}×",
 
     "lev.title": "ПЛЕЧО И РАСЧЁТ ПОЗИЦИИ (реальные данные бирж)",
     "lev.leverage": "Плечо",
@@ -130,6 +140,9 @@ const STRINGS = {
     "compare.cheapest": "дешевле",
     "compare.priciest": "дороже",
     "compare.unavailable": "Недоступны: {list}",
+    "compare.arbTitle": "АРБИТРАЖ",
+    "compare.arbYes": "Купить на {buy} → продать на {sell}: чистыми +{net}% (спред {gross}%, комиссии ~{fee}%)",
+    "compare.arbNo": "Спред {gross}% не покрывает комиссии ~{fee}% — арбитраж невыгоден.",
 
     "footer":
       "Данные через публичные эндпоинты CCXT. Стенки = уровни стакана, объём которых статистически аномален (z-score). Плечо подтягивается из реальных лимитов бессрочных контрактов бирж. ML прогнозирует движение на {h} свечей вперёд (вниз / флэт / вверх). Не является финансовым советом.",
@@ -300,6 +313,16 @@ const STRINGS = {
     "signal.modelAcc": "Model acc {acc}%",
     "signal.noMlModel": "No ML model trained for this pair (density-only signal).",
     "signal.backtestWinrate": " · backtest win-rate {wr}% over {n} trades",
+    "signal.action.long": "LONG — buy",
+    "signal.action.short": "SHORT — sell",
+    "signal.action.flat": "NO TRADE",
+    "signal.dirHint.long": "Buy: enter at support, profit as price rises to target.",
+    "signal.dirHint.short": "Sell: enter at resistance, profit as price falls to target.",
+    "signal.expProfit": "Expected profit",
+    "signal.expRisk": "Risk (if stopped)",
+    "signal.atTarget": "if target is hit",
+    "signal.atStop": "if stop is hit",
+    "signal.withLev": "at {lev}× leverage",
 
     "lev.title": "LEVERAGE & POSITION SIZING (real exchange data)",
     "lev.leverage": "Leverage",
@@ -355,6 +378,9 @@ const STRINGS = {
     "compare.cheapest": "cheapest",
     "compare.priciest": "priciest",
     "compare.unavailable": "Unavailable: {list}",
+    "compare.arbTitle": "ARBITRAGE",
+    "compare.arbYes": "Buy on {buy} → sell on {sell}: net +{net}% (spread {gross}%, fees ~{fee}%)",
+    "compare.arbNo": "Spread {gross}% does not cover ~{fee}% fees — arbitrage not profitable.",
 
     "footer":
       "Data via public CCXT endpoints. Walls = order-book levels whose notional size is a statistical outlier (z-score). Leverage is pulled from real exchange perpetual limits. ML predicts the next {h}-candle move (down / flat / up). Not financial advice.",

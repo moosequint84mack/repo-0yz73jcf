@@ -12,7 +12,6 @@ function fmt(n, d = 2) {
 }
 
 const ACTION_CLASS = { long: "up", short: "down", flat: "flat" };
-const ACTION_LABEL = { long: "LONG", short: "SHORT", flat: "NO TRADE" };
 
 export default function SignalPanel({ data, loading }) {
   const { t } = useT();
@@ -28,43 +27,79 @@ export default function SignalPanel({ data, loading }) {
   const isTrade = action === "long" || action === "short";
   const lev = sig.leverage || {};
   const levInfo = sig.leverage_info || {};
+  const actionLabel = t(`signal.action.${action}`);
 
   return (
     <div className="body">
-      <div className="signal" style={{ marginBottom: 14 }}>
-        <div className={"badge " + (ACTION_CLASS[action] || "flat")}>
-          {ACTION_LABEL[action] || "NO TRADE"}
+      {/* Big, unambiguous direction headline. */}
+      <div
+        className={"trade-headline " + (ACTION_CLASS[action] || "flat")}
+        style={{ marginBottom: isTrade ? 12 : 14 }}
+      >
+        <div className={"badge " + (ACTION_CLASS[action] || "flat")} style={{ fontSize: 18 }}>
+          {action === "long" ? "▲ " : action === "short" ? "▼ " : ""}
+          {actionLabel}
         </div>
-        <div className="probs">
-          {isTrade ? (
-            <>
-              <div className="bar-row">
-                <span className="muted">{t("signal.entry")}</span>
-                <span style={{ textAlign: "right" }}>{fmt(sig.entry)}</span>
-                <span />
-              </div>
-              <div className="bar-row">
-                <span className="muted">{t("signal.stop")}</span>
-                <span className="red" style={{ textAlign: "right" }}>
-                  {fmt(sig.stop)}
-                </span>
-                <span className="red">-{fmt(sig.risk_pct)}%</span>
-              </div>
-              <div className="bar-row">
-                <span className="muted">{t("signal.target")}</span>
-                <span className="green" style={{ textAlign: "right" }}>
-                  {fmt(sig.target)}
-                </span>
-                <span className="green">+{fmt(sig.reward_pct)}%</span>
-              </div>
-            </>
-          ) : (
-            <div className="muted" style={{ fontSize: 12 }}>
-              {sig.reason || t("signal.noConfluence")}
-            </div>
-          )}
-        </div>
+        {isTrade && (
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            {t(`signal.dirHint.${action}`)}
+          </div>
+        )}
       </div>
+
+      {/* Expected result vs risk — the two numbers a trader cares about most. */}
+      {isTrade && (
+        <div className="result-grid" style={{ marginBottom: 12 }}>
+          <div className="result-box green">
+            <div className="k">{t("signal.expProfit")}</div>
+            <div className="v">+{fmt(sig.reward_pct)}%</div>
+            {lev.applicable && lev.profit_usd != null && (
+              <div className="sub">+${fmt(lev.profit_usd, 2)} {t("signal.withLev", { lev: fmt(lev.leverage, 1) })}</div>
+            )}
+            <div className="sub muted">{t("signal.atTarget")} · {fmt(sig.target)}</div>
+          </div>
+          <div className="result-box red">
+            <div className="k">{t("signal.expRisk")}</div>
+            <div className="v">-{fmt(sig.risk_pct)}%</div>
+            {lev.applicable && lev.loss_usd != null && (
+              <div className="sub">-${fmt(lev.loss_usd, 2)} {t("signal.withLev", { lev: fmt(lev.leverage, 1) })}</div>
+            )}
+            <div className="sub muted">{t("signal.atStop")} · {fmt(sig.stop)}</div>
+          </div>
+        </div>
+      )}
+
+      {isTrade && (
+        <div className="signal" style={{ marginBottom: 14 }}>
+          <div className="probs">
+            <div className="bar-row">
+              <span className="muted">{t("signal.entry")}</span>
+              <span style={{ textAlign: "right" }}>{fmt(sig.entry)}</span>
+              <span />
+            </div>
+            <div className="bar-row">
+              <span className="muted">{t("signal.stop")}</span>
+              <span className="red" style={{ textAlign: "right" }}>
+                {fmt(sig.stop)}
+              </span>
+              <span className="red">-{fmt(sig.risk_pct)}%</span>
+            </div>
+            <div className="bar-row">
+              <span className="muted">{t("signal.target")}</span>
+              <span className="green" style={{ textAlign: "right" }}>
+                {fmt(sig.target)}
+              </span>
+              <span className="green">+{fmt(sig.reward_pct)}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isTrade && (
+        <div className="muted" style={{ fontSize: 12, marginBottom: 14 }}>
+          {sig.reason || t("signal.noConfluence")}
+        </div>
+      )}
 
       {isTrade && (
         <div className="chips" style={{ marginBottom: 12 }}>

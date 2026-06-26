@@ -30,8 +30,8 @@ class TrainRequest(BaseModel):
     exchange: str = Field(default=settings.default_exchange)
     timeframe: str = Field(default=settings.timeframe)
     history: int = Field(default=settings.history_candles, ge=300, le=20000)
-    horizon: int = Field(default=12, ge=1, le=200)
-    threshold: float = Field(default=0.004, gt=0, le=0.2)
+    horizon: int = Field(default=settings.ml_horizon, ge=1, le=200)
+    threshold: float = Field(default=settings.ml_threshold, gt=0, le=0.2)
 
 
 class PredictRequest(BaseModel):
@@ -45,8 +45,8 @@ class TrainAllRequest(BaseModel):
     exchange: str = Field(default=settings.default_exchange)
     timeframe: str = Field(default=settings.timeframe)
     history: int = Field(default=settings.history_candles, ge=300, le=20000)
-    horizon: int = Field(default=12, ge=1, le=200)
-    threshold: float = Field(default=0.004, gt=0, le=0.2)
+    horizon: int = Field(default=settings.ml_horizon, ge=1, le=200)
+    threshold: float = Field(default=settings.ml_threshold, gt=0, le=0.2)
 
 
 class SignalRequest(BaseModel):
@@ -55,7 +55,7 @@ class SignalRequest(BaseModel):
     timeframe: str = Field(default=settings.timeframe)
     reward_ratio: float = Field(default=1.5, ge=0.5, le=5.0)
     proximity_pct: float = Field(default=0.6, ge=0.05, le=5.0)
-    min_confidence: float = Field(default=0.40, ge=0.0, le=1.0)
+    min_confidence: float = Field(default=0.34, ge=0.0, le=1.0)
     equity: float = Field(default=1000.0, gt=0, le=1e9)
     risk_per_trade_pct: float = Field(default=1.0, gt=0, le=100.0)
     leverage: float | None = Field(default=None, ge=1.0, le=500.0)

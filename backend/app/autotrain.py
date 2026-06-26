@@ -44,7 +44,9 @@ async def _train_symbol(symbol: str) -> dict[str, Any]:
     candles = await manager.fetch_ohlcv(
         symbol, exchange, timeframe, settings.history_candles
     )
-    model = await asyncio.to_thread(store.train, candles, key, 12, 0.004)
+    model = await asyncio.to_thread(
+        store.train, candles, key, settings.ml_horizon, settings.ml_threshold
+    )
     record_training_run(symbol, exchange, timeframe, model.result)
     bt = model.result.backtest or {}
     return {

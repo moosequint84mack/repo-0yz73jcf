@@ -59,6 +59,13 @@ async def compare_exchanges(symbol: str, exchange_ids: list[str]) -> dict[str, A
     for s in valid:
         s["deviation_pct"] = (s["last"] - avg) / avg * 100 if avg else 0.0
 
+    # Deterministic arbitrage edge: buy on the cheapest venue's ask, sell on the
+    # priciest venue's bid. The gross spread must clear a realistic round-trip
+    # cost (taker fees both sides + withdrawal/slippage ≈ 0.2%) to be actionable —
+    # this is a *real*, verifiable signal, not a model guess.
+    round_trip_fee_pct = 0.20
+    arb_gross_pct = spread_pct
+    arb_net_pct = arb_gross_pct - round_trip_fee_pct
     result["divergence"] = {
         "average": avg,
         "min": cheapest["last"],
@@ -70,5 +77,9 @@ async def compare_exchanges(symbol: str, exchange_ids: list[str]) -> dict[str, A
         # Naive arbitrage hint: buy on cheapest ask, sell on priciest bid.
         "arb_buy": cheapest["exchange"],
         "arb_sell": priciest["exchange"],
+        "arb_gross_pct": arb_gross_pct,
+        "arb_fee_pct": round_trip_fee_pct,
+        "arb_net_pct": arb_net_pct,
+        "arb_actionable": bool(arb_net_pct > 0),
     }
     return result

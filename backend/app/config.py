@@ -24,8 +24,19 @@ class Settings(BaseSettings):
     orderbook_limit: int = 100
 
     # Candle timeframe and history window used for ML training.
-    timeframe: str = "5m"
-    history_candles: int = 16000  # ~2 months of 5m candles for richer training
+    # Higher timeframe (1h) carries a far better signal/noise ratio than 5m for
+    # next-move prediction: trends persist, microstructure noise averages out, so
+    # the model and the trade signals are markedly more reliable.
+    timeframe: str = "1h"
+    history_candles: int = 4000  # ~166 days of 1h candles for richer training
+
+    # --- Prediction target (self-learning) ---
+    # How far ahead the classifier predicts, in candles, and the minimum move that
+    # counts as up/down (triple-barrier widens this with each coin's ATR). On 1h
+    # candles, horizon=8 ≈ an 8-hour outlook and a 1.2% floor filters out chop, so
+    # the model learns *meaningful* moves instead of noise.
+    ml_horizon: int = 8
+    ml_threshold: float = 0.012
 
     # Density detection: a level is a "wall" if its size >= this many std devs
     # above the mean level size on its side of the book.
