@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from ..comparison import compare_exchanges
 from ..config import settings
 from ..density import analyze_order_book
+from ..density_tracker import annotate_wall_ages
 from ..exchanges import manager
 
 router = APIRouter(prefix="/api", tags=["market"])
@@ -20,6 +21,7 @@ async def get_config() -> dict[str, Any]:
         "exchanges": settings.exchanges,
         "default_exchange": settings.default_exchange,
         "default_symbol": settings.default_symbol,
+        "symbols": settings.screener_symbols,
         "timeframe": settings.timeframe,
         "orderbook_limit": settings.orderbook_limit,
         "history_candles": settings.history_candles,
@@ -61,6 +63,8 @@ async def get_orderbook(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"{exchange}: {exc}") from exc
     analysis = analyze_order_book(ob, zscore_threshold=zscore)
+    all_walls = analysis.get("bid_walls", []) + analysis.get("ask_walls", [])
+    annotate_wall_ages(symbol, exchange, all_walls)
     analysis.update({"symbol": symbol, "exchange": exchange})
     return analysis
 

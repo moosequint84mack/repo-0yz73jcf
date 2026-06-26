@@ -9,6 +9,7 @@ import SignalPanel from "../components/SignalPanel.jsx";
 import ScreenerPanel from "../components/ScreenerPanel.jsx";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h"];
+// Fallback list used until /api/config returns the authoritative set of pairs.
 export const SYMBOLS = [
   "BTC/USDT",
   "ETH/USDT",
@@ -22,7 +23,22 @@ export const SYMBOLS = [
   "DOT/USDT",
   "LTC/USDT",
   "TRX/USDT",
+  "BCH/USDT",
+  "ATOM/USDT",
+  "UNI/USDT",
+  "ETC/USDT",
+  "NEAR/USDT",
+  "FIL/USDT",
+  "APT/USDT",
+  "ARB/USDT",
+  "OP/USDT",
+  "INJ/USDT",
+  "SUI/USDT",
+  "AAVE/USDT",
 ];
+
+const WATCHLIST_KEY = "screener_watchlist";
+const MAX_WATCH = 10;
 
 export default function Dashboard() {
   const { t } = useT();
@@ -46,6 +62,38 @@ export default function Dashboard() {
   const [predicting, setPredicting] = useState(false);
   const [error, setError] = useState(null);
   const [live, setLive] = useState(true);
+
+  // Pairs available to view come from the backend config (fallback: SYMBOLS).
+  const allSymbols = cfg?.symbols?.length ? cfg.symbols : SYMBOLS;
+
+  // User watchlist: 1–10 pairs the screener focuses on, persisted locally.
+  const [watchlist, setWatchlist] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(WATCHLIST_KEY) || "[]");
+      return Array.isArray(saved) ? saved.slice(0, MAX_WATCH) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [watchOpen, setWatchOpen] = useState(false);
+
+  const toggleWatch = (sym) => {
+    setWatchlist((prev) => {
+      let next;
+      if (prev.includes(sym)) next = prev.filter((s) => s !== sym);
+      else if (prev.length >= MAX_WATCH) next = prev;
+      else next = [...prev, sym];
+      localStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+  const clearWatch = () => {
+    setWatchlist([]);
+    localStorage.setItem(WATCHLIST_KEY, "[]");
+  };
+
+  // The screener table shows the watchlist if set, otherwise every pair.
+  const screenerSymbols = watchlist.length ? watchlist : allSymbols;
 
   const liveRef = useRef(live);
   liveRef.current = live;
@@ -195,7 +243,7 @@ export default function Dashboard() {
     setError(null);
     try {
       const d = await api.trainAll({
-        symbols: SYMBOLS,
+        symbols: screenerSymbols,
         exchange,
         timeframe,
         history: cfg?.history_candles || 4000,
@@ -218,7 +266,7 @@ export default function Dashboard() {
         <div className="field">
           <label>{t("field.symbol")}</label>
           <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>
-            {SYMBOLS.map((s) => (
+            {allSymbols.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
@@ -249,6 +297,42 @@ export default function Dashboard() {
             {live ? t("live.on") : t("live.off")}
           </button>
         </div>
+        <div className="field" style={{ position: "relative" }}>
+          <label>&nbsp;</label>
+          <button className="ghost" onClick={() => setWatchOpen((v) => !v)}>
+            {t("watch.button", { n: watchlist.length })}
+          </button>
+          {watchOpen && (
+            <div className="watch-pop">
+              <div className="watch-pop-head">
+                <span>{t("watch.title", { max: MAX_WATCH })}</span>
+                <button className="linkish" onClick={clearWatch}>
+                  {t("watch.all")}
+                </button>
+              </div>
+              <div className="watch-list">
+                {allSymbols.map((s) => {
+                  const on = watchlist.includes(s);
+                  const disabled = !on && watchlist.length >= MAX_WATCH;
+                  return (
+                    <label
+                      key={s}
+                      className={"watch-item" + (disabled ? " disabled" : "")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={disabled}
+                        onChange={() => toggleWatch(s)}
+                      />
+                      {s}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && <div className="error">⚠ {error}</div>}
@@ -259,7 +343,7 @@ export default function Dashboard() {
           <span className="muted">{t("screener.subtitle")}</span>
         </h3>
         <ScreenerPanel
-          symbols={SYMBOLS}
+          symbols={screenerSymbols}
           results={trainAll}
           running={trainingAll}
           onTrainAll={onTrainAll}

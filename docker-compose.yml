@@ -29,7 +29,8 @@ services:
     depends_on:
       - backend
     ports:
-      - "${SCREENER_HTTP_PORT:-8080}:80"
+      # Landing page at http://<host>/ and the app at http://<host>/screener.
+      - "${SCREENER_HTTP_PORT:-80}:80"
 
 volumes:
   screener-data:

@@ -82,10 +82,13 @@ class Settings(BaseSettings):
     # Wait this many seconds after startup before the first retraining cycle so
     # the API is responsive immediately on boot.
     autotrain_initial_delay_seconds: int = 30
-    # Pairs the continuous trainer (and screener) operate on.
+    # Pairs the continuous trainer (and screener) operate on. All are liquid
+    # markets available on the public APIs of the enabled exchanges.
     screener_symbols: list[str] = [
         "BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "DOGE/USDT",
         "ADA/USDT", "AVAX/USDT", "LINK/USDT", "DOT/USDT", "LTC/USDT", "TRX/USDT",
+        "BCH/USDT", "ATOM/USDT", "UNI/USDT", "ETC/USDT", "NEAR/USDT", "FIL/USDT",
+        "APT/USDT", "ARB/USDT", "OP/USDT", "INJ/USDT", "SUI/USDT", "AAVE/USDT",
     ]
 
 

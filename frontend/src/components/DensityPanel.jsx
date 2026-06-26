@@ -6,6 +6,14 @@ function fmt(n, d = 0) {
   return Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
 }
 
+function fmtAge(s) {
+  if (s == null) return "—";
+  s = Math.round(Number(s));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+
 export default function DensityPanel({ ob }) {
   const { t } = useT();
   if (!ob || !ob.heatmap) return <div className="body muted">{t("density.none")}</div>;
@@ -70,6 +78,7 @@ export default function DensityPanel({ ob }) {
             <th>{t("density.col.price")}</th>
             <th>{t("density.col.size")}</th>
             <th>{t("density.col.notional")}</th>
+            <th>{t("density.col.age")}</th>
             <th>{t("density.col.z")}</th>
           </tr>
         </thead>
@@ -85,6 +94,7 @@ export default function DensityPanel({ ob }) {
                 <td>{fmt(w.price, 2)}</td>
                 <td>{fmt(w.amount, 3)}</td>
                 <td>{fmt(w.notional)}</td>
+                <td className="muted">{fmtAge(w.age_seconds)}</td>
                 <td className="muted">{w.zscore.toFixed(1)}</td>
               </tr>
             ))}
