@@ -1,11 +1,14 @@
 // Cross-exchange price comparison and divergence/arbitrage hint.
+import { useT } from "../i18n.jsx";
+
 function fmt(n, d = 2) {
   if (n == null) return "—";
   return Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
 }
 
 export default function ComparePanel({ data }) {
-  if (!data) return <div className="body muted">Loading comparison…</div>;
+  const { t } = useT();
+  if (!data) return <div className="body muted">{t("compare.loading")}</div>;
   const { exchanges, divergence, unavailable } = data;
   const sorted = [...exchanges].sort((a, b) => a.last - b.last);
 
@@ -14,15 +17,15 @@ export default function ComparePanel({ data }) {
       {divergence && (
         <div className="chips" style={{ marginBottom: 12 }}>
           <div className="chip">
-            <div className="k">Avg price</div>
+            <div className="k">{t("compare.avg")}</div>
             <div className="v">{fmt(divergence.average)}</div>
           </div>
           <div className="chip">
-            <div className="k">Spread</div>
+            <div className="k">{t("compare.spread")}</div>
             <div className="v yellow">{divergence.spread_pct.toFixed(3)}%</div>
           </div>
           <div className="chip">
-            <div className="k">Buy / Sell</div>
+            <div className="k">{t("compare.buySell")}</div>
             <div className="v" style={{ fontSize: 13 }}>
               <span className="green">{divergence.arb_buy}</span>
               {" → "}
@@ -34,11 +37,11 @@ export default function ComparePanel({ data }) {
       <table>
         <thead>
           <tr>
-            <th>Exchange</th>
-            <th>Last</th>
-            <th>Bid</th>
-            <th>Ask</th>
-            <th>Δ vs avg</th>
+            <th>{t("compare.col.exchange")}</th>
+            <th>{t("compare.col.last")}</th>
+            <th>{t("compare.col.bid")}</th>
+            <th>{t("compare.col.ask")}</th>
+            <th>{t("compare.col.dev")}</th>
           </tr>
         </thead>
         <tbody>
@@ -48,12 +51,12 @@ export default function ComparePanel({ data }) {
                 {e.exchange}
                 {divergence && e.exchange === divergence.cheapest_exchange && (
                   <span className="tag green" style={{ marginLeft: 6 }}>
-                    cheapest
+                    {t("compare.cheapest")}
                   </span>
                 )}
                 {divergence && e.exchange === divergence.priciest_exchange && (
                   <span className="tag red" style={{ marginLeft: 6 }}>
-                    priciest
+                    {t("compare.priciest")}
                   </span>
                 )}
               </td>
@@ -70,7 +73,7 @@ export default function ComparePanel({ data }) {
       </table>
       {unavailable?.length > 0 && (
         <div className="muted" style={{ marginTop: 8, fontSize: 11 }}>
-          Unavailable: {unavailable.join(", ")}
+          {t("compare.unavailable", { list: unavailable.join(", ") })}
         </div>
       )}
     </div>

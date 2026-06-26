@@ -48,6 +48,9 @@ class SignalRequest(BaseModel):
     reward_ratio: float = Field(default=1.5, ge=0.5, le=5.0)
     proximity_pct: float = Field(default=0.6, ge=0.05, le=5.0)
     min_confidence: float = Field(default=0.40, ge=0.0, le=1.0)
+    equity: float = Field(default=1000.0, gt=0, le=1e9)
+    risk_per_trade_pct: float = Field(default=1.0, gt=0, le=100.0)
+    leverage: float | None = Field(default=None, ge=1.0, le=500.0)
 
 
 def _result_payload(result: Any, top_n_features: int = 15) -> dict[str, Any]:
@@ -104,6 +107,8 @@ async def train_all(req: TrainAllRequest) -> dict[str, Any]:
                     "ok": True,
                     "candles_fetched": len(candles),
                     "accuracy": model.result.accuracy,
+                    "macro_f1": model.result.macro_f1,
+                    "weighted_f1": model.result.weighted_f1,
                     "n_train": model.result.n_train,
                     "n_test": model.result.n_test,
                     "win_rate": bt.get("win_rate"),
@@ -135,6 +140,13 @@ async def signal(req: SignalRequest) -> dict[str, Any]:
 
     analysis = analyze_order_book(ob)
 
+    # Real per-coin leverage from exchange metadata (cached ~1h, never blocks the
+    # signal: fall back to None if the venues expose no perpetual market).
+    try:
+        leverage_info = await manager.fetch_leverage_info(req.symbol)
+    except Exception:  # noqa: BLE001
+        leverage_info = None
+
     prediction: dict[str, Any] | None = None
     key = store.make_key(req.exchange, req.symbol, req.timeframe)
     model = store.get(key)
@@ -151,6 +163,10 @@ async def signal(req: SignalRequest) -> dict[str, Any]:
         proximity_pct=req.proximity_pct,
         reward_ratio=req.reward_ratio,
         min_confidence=req.min_confidence,
+        leverage_info=leverage_info,
+        equity=req.equity,
+        risk_per_trade_pct=req.risk_per_trade_pct,
+        leverage_override=req.leverage,
     )
     return {
         "symbol": req.symbol,
@@ -162,6 +178,15 @@ async def signal(req: SignalRequest) -> dict[str, Any]:
         "prediction": prediction,
         "signal": plan,
     }
+
+
+@router.get("/leverage")
+async def leverage(symbol: str = settings.default_symbol) -> dict[str, Any]:
+    """Real max leverage per coin, aggregated across the enabled exchanges."""
+    try:
+        return await manager.fetch_leverage_info(symbol)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/predict")

@@ -27,6 +27,8 @@ CLASS_NAMES = {0: "down", 1: "flat", 2: "up"}
 @dataclass
 class TrainResult:
     accuracy: float
+    macro_f1: float
+    weighted_f1: float
     classes: list[int]
     report: dict[str, Any]
     confusion: list[list[int]]
@@ -109,15 +111,20 @@ class ModelStore:
         class_weight = {c: total / (len(counts) * n) for c, n in counts.items() if n > 0}
 
         clf = LGBMClassifier(
-            n_estimators=400,
-            learning_rate=0.05,
-            num_leaves=31,
+            n_estimators=900,
+            learning_rate=0.03,
+            num_leaves=48,
             max_depth=-1,
+            min_child_samples=60,
             subsample=0.8,
-            colsample_bytree=0.8,
-            reg_lambda=1.0,
+            subsample_freq=1,
+            colsample_bytree=0.7,
+            reg_alpha=0.2,
+            reg_lambda=1.5,
+            min_split_gain=0.0,
             class_weight=class_weight,
             random_state=42,
+            n_jobs=-1,
             verbose=-1,
         )
         eval_result: dict[str, Any] = {}
@@ -127,7 +134,7 @@ class ModelStore:
             eval_set=[(X_test, y_test)],
             eval_metric="multi_logloss",
             callbacks=[
-                early_stopping(stopping_rounds=40, verbose=False),
+                early_stopping(stopping_rounds=60, verbose=False),
                 log_evaluation(period=0),
                 _record_eval(eval_result),
             ],
@@ -169,8 +176,13 @@ class ModelStore:
         ]
         label_dist = {CLASS_NAMES[int(c)]: int((y == c).sum()) for c in classes}
 
+        macro_f1 = float(report.get("macro avg", {}).get("f1-score", 0.0))
+        weighted_f1 = float(report.get("weighted avg", {}).get("f1-score", 0.0))
+
         result = TrainResult(
             accuracy=acc,
+            macro_f1=macro_f1,
+            weighted_f1=weighted_f1,
             classes=classes,
             report=report,
             confusion=conf,

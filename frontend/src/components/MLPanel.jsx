@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useT } from "../i18n.jsx";
 
 // Sparkline for the LightGBM validation log-loss learning curve.
-function LearningCurve({ curve }) {
+function LearningCurve({ curve, t }) {
   if (!curve || curve.length < 2) return null;
   const w = 240;
   const h = 56;
@@ -19,7 +20,7 @@ function LearningCurve({ curve }) {
   return (
     <div>
       <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-        Validation log-loss over {curve.length} boosting rounds (lower = learning)
+        {t("ml.curveLabel", { n: curve.length })}
       </div>
       <svg width={w} height={h} style={{ display: "block" }}>
         <polyline points={pts} fill="none" stroke="#4c8dff" strokeWidth="2" />
@@ -30,14 +31,14 @@ function LearningCurve({ curve }) {
 
 const CLASSES = ["down", "flat", "up"];
 
-function Confusion({ matrix, classes }) {
+function Confusion({ matrix, classes, t }) {
   if (!matrix) return null;
   const names = classes.map((c) => CLASSES[c]);
   return (
     <table style={{ marginTop: 8 }}>
       <thead>
         <tr>
-          <th>actual ╲ pred</th>
+          <th>{t("ml.confActualPred")}</th>
           {names.map((n) => (
             <th key={n}>{n}</th>
           ))}
@@ -67,6 +68,7 @@ export default function MLPanel({
   onTrain,
   onPredict,
 }) {
+  const { t } = useT();
   const [horizon, setHorizon] = useState(12);
   const [threshold, setThreshold] = useState(0.4); // percent in UI
   const result = status?.result;
@@ -75,7 +77,7 @@ export default function MLPanel({
     <div className="body">
       <div className="controls" style={{ marginBottom: 12 }}>
         <div className="field">
-          <label>Horizon (candles)</label>
+          <label>{t("ml.horizon")}</label>
           <input
             type="number"
             min={1}
@@ -86,7 +88,7 @@ export default function MLPanel({
           />
         </div>
         <div className="field">
-          <label>Move threshold %</label>
+          <label>{t("ml.threshold")}</label>
           <input
             type="number"
             min={0.05}
@@ -103,14 +105,14 @@ export default function MLPanel({
             disabled={training}
           >
             {training && <span className="spinner" />}
-            {training ? "Training…" : "Train / Re-train"}
+            {training ? t("ml.training") : t("ml.train")}
           </button>
         </div>
         <div className="field">
           <label>&nbsp;</label>
           <button className="ghost" onClick={onPredict} disabled={predicting || !result}>
             {predicting && <span className="spinner" />}
-            Predict next move
+            {t("ml.predict")}
           </button>
         </div>
       </div>
@@ -138,38 +140,35 @@ export default function MLPanel({
               );
             })}
             <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-              as of {new Date(prediction.as_of).toLocaleString()} · horizon{" "}
-              {prediction.horizon} candles · model acc{" "}
-              {(prediction.accuracy * 100).toFixed(1)}%
+              {t("ml.asOf", {
+                date: new Date(prediction.as_of).toLocaleString(),
+                h: prediction.horizon,
+                acc: (prediction.accuracy * 100).toFixed(1),
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {!result && (
-        <div className="muted">
-          No trained model yet for this symbol/exchange/timeframe. Click{" "}
-          <b>Train</b> to learn patterns from ~1 month of candles.
-        </div>
-      )}
+      {!result && <div className="muted">{t("ml.noModel")}</div>}
 
       {result && (
         <>
           <div className="chips" style={{ marginBottom: 12 }}>
             <div className="chip">
-              <div className="k">Accuracy</div>
+              <div className="k">{t("ml.accuracy")}</div>
               <div className="v">{(result.accuracy * 100).toFixed(1)}%</div>
             </div>
             <div className="chip">
-              <div className="k">Train rows</div>
+              <div className="k">{t("ml.trainRows")}</div>
               <div className="v">{result.n_train}</div>
             </div>
             <div className="chip">
-              <div className="k">Test rows</div>
+              <div className="k">{t("ml.testRows")}</div>
               <div className="v">{result.n_test}</div>
             </div>
             <div className="chip">
-              <div className="k">Labels d/f/u</div>
+              <div className="k">{t("ml.labels")}</div>
               <div className="v" style={{ fontSize: 13 }}>
                 {result.label_distribution.down}/{result.label_distribution.flat}/
                 {result.label_distribution.up}
@@ -180,15 +179,15 @@ export default function MLPanel({
           {result.backtest && result.backtest.n_trades > 0 && (
             <>
               <h4 style={{ margin: "14px 0 4px", color: "var(--muted)", fontSize: 11 }}>
-                OUT-OF-SAMPLE BACKTEST (bracket trades on test set)
+                {t("ml.backtestTitle")}
               </h4>
               <div className="chips" style={{ marginBottom: 12 }}>
                 <div className="chip">
-                  <div className="k">Trades</div>
+                  <div className="k">{t("ml.trades")}</div>
                   <div className="v">{result.backtest.n_trades}</div>
                 </div>
                 <div className="chip">
-                  <div className="k">Win-rate</div>
+                  <div className="k">{t("ml.winrate")}</div>
                   <div
                     className="v"
                     style={{ color: result.backtest.win_rate >= 50 ? "var(--green)" : "var(--red)" }}
@@ -197,7 +196,7 @@ export default function MLPanel({
                   </div>
                 </div>
                 <div className="chip">
-                  <div className="k">Profit factor</div>
+                  <div className="k">{t("ml.pf")}</div>
                   <div
                     className="v"
                     style={{
@@ -208,7 +207,7 @@ export default function MLPanel({
                   </div>
                 </div>
                 <div className="chip">
-                  <div className="k">Expectancy</div>
+                  <div className="k">{t("ml.expectancy")}</div>
                   <div
                     className="v"
                     style={{
@@ -220,13 +219,13 @@ export default function MLPanel({
                   </div>
                 </div>
                 <div className="chip">
-                  <div className="k">Max drawdown</div>
+                  <div className="k">{t("ml.maxdd")}</div>
                   <div className="v red" style={{ fontSize: 14 }}>
                     {result.backtest.max_drawdown_pct?.toFixed(2)}%
                   </div>
                 </div>
                 <div className="chip">
-                  <div className="k">Sharpe-like</div>
+                  <div className="k">{t("ml.sharpe")}</div>
                   <div className="v" style={{ fontSize: 14 }}>
                     {result.backtest.sharpe_like?.toFixed(2)}
                   </div>
@@ -235,15 +234,15 @@ export default function MLPanel({
             </>
           )}
 
-          <LearningCurve curve={result.learning_curve} />
+          <LearningCurve curve={result.learning_curve} t={t} />
 
           <h4 style={{ margin: "14px 0 4px", color: "var(--muted)", fontSize: 11 }}>
-            CONFUSION MATRIX (test set)
+            {t("ml.confusionTitle")}
           </h4>
-          <Confusion matrix={result.confusion} classes={result.classes} />
+          <Confusion matrix={result.confusion} classes={result.classes} t={t} />
 
           <h4 style={{ margin: "16px 0 4px", color: "var(--muted)", fontSize: 11 }}>
-            TOP FEATURE IMPORTANCES
+            {t("ml.featTitle")}
           </h4>
           <div className="bars">
             {Object.entries(result.feature_importances)

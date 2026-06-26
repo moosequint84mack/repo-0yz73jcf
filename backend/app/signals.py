@@ -35,6 +35,76 @@ def _atr(candles: list[list[float]], period: int = 14) -> float:
     return float(tr[-period:].mean())
 
 
+def compute_leveraged_trade(
+    action: str,
+    entry: float,
+    stop: float,
+    target: float,
+    leverage_info: dict[str, Any] | None,
+    equity: float,
+    risk_per_trade_pct: float,
+    leverage_override: float | None = None,
+) -> dict[str, Any]:
+    """Size a leveraged position from real per-coin leverage and account risk.
+
+    Position sizing is risk-based: notional is chosen so that hitting the stop
+    loses exactly `risk_per_trade_pct` of equity. Leverage then determines the
+    margin posted and the return-on-margin (ROE), and sets the liquidation price
+    (isolated-margin approximation: liq ≈ entry·(1 ∓ 1/L), before fees and the
+    exchange's maintenance margin, so the real liquidation sits slightly closer).
+    """
+    stop_frac = abs(entry - stop) / entry
+    reward_frac = abs(target - entry) / entry
+    if stop_frac <= 0:
+        return {"applicable": False, "reason": "Degenerate stop distance."}
+
+    max_available = (leverage_info or {}).get("max_leverage")
+    # Recommended leverage keeps liquidation at least 2x beyond the stop.
+    safety_capped = max(1.0, 1.0 / (2.0 * stop_frac))
+    if leverage_override is not None and leverage_override > 0:
+        leverage = leverage_override
+    else:
+        leverage = safety_capped
+    # Never exceed what exchanges actually offer; otherwise apply a sane hard cap.
+    hard_cap = max_available if max_available else 20.0
+    leverage = float(max(1.0, min(leverage, hard_cap)))
+
+    risk_amount = equity * (risk_per_trade_pct / 100.0)
+    notional = risk_amount / stop_frac
+    base_qty = notional / entry
+    margin_required = notional / leverage
+    profit_usd = notional * reward_frac
+    loss_usd = notional * stop_frac  # equals risk_amount by construction
+
+    liq_distance_frac = 1.0 / leverage
+    if action == "long":
+        liq_price = entry * (1.0 - liq_distance_frac)
+        stop_before_liq = stop > liq_price
+    else:
+        liq_price = entry * (1.0 + liq_distance_frac)
+        stop_before_liq = stop < liq_price
+
+    return {
+        "applicable": True,
+        "leverage": round(leverage, 2),
+        "max_leverage_available": max_available,
+        "recommended_leverage": round(float(max(1.0, min(safety_capped, hard_cap))), 2),
+        "equity": equity,
+        "risk_per_trade_pct": risk_per_trade_pct,
+        "risk_amount": round(risk_amount, 2),
+        "notional": round(notional, 2),
+        "position_size_base": base_qty,
+        "margin_required": round(margin_required, 2),
+        "profit_usd": round(profit_usd, 2),
+        "loss_usd": round(loss_usd, 2),
+        "roe_target_pct": round(reward_frac * leverage * 100, 2),
+        "roe_stop_pct": round(-stop_frac * leverage * 100, 2),
+        "liquidation_price": float(liq_price),
+        "liquidation_distance_pct": round(liq_distance_frac * 100, 3),
+        "stop_before_liquidation": bool(stop_before_liq),
+    }
+
+
 def build_trade_signal(
     analysis: dict[str, Any],
     prediction: dict[str, Any] | None,
@@ -42,6 +112,10 @@ def build_trade_signal(
     proximity_pct: float = 0.6,
     reward_ratio: float = 1.5,
     min_confidence: float = 0.40,
+    leverage_info: dict[str, Any] | None = None,
+    equity: float = 1000.0,
+    risk_per_trade_pct: float = 1.0,
+    leverage_override: float | None = None,
 ) -> dict[str, Any]:
     """Produce a trade plan from order-book analysis + an optional ML prediction."""
     metrics = analysis.get("metrics", {})
@@ -135,6 +209,7 @@ def build_trade_signal(
         "bounce": bounce,
         "rationale": rationale,
         "reward_ratio": reward_ratio,
+        "leverage_info": leverage_info,
     }
 
     if action == "flat":
@@ -181,5 +256,17 @@ def build_trade_signal(
             "support": support,
             "resistance": resistance,
         }
+    )
+
+    # Leveraged position sizing from real per-coin exchange leverage.
+    plan["leverage"] = compute_leveraged_trade(
+        action=action,
+        entry=float(entry),
+        stop=float(stop),
+        target=float(target),
+        leverage_info=leverage_info,
+        equity=equity,
+        risk_per_trade_pct=risk_per_trade_pct,
+        leverage_override=leverage_override,
     )
     return plan

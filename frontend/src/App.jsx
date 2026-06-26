@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { useT } from "./i18n.jsx";
 import PriceChart from "./components/PriceChart.jsx";
 import DensityPanel from "./components/DensityPanel.jsx";
 import ComparePanel from "./components/ComparePanel.jsx";
@@ -24,6 +25,7 @@ const SYMBOLS = [
 ];
 
 export default function App() {
+  const { t, lang, setLang } = useT();
   const [cfg, setCfg] = useState(null);
   const [symbol, setSymbol] = useState("BTC/USDT");
   const [exchange, setExchange] = useState("okx");
@@ -194,11 +196,11 @@ export default function App() {
     <div className="app">
       <div className="topbar">
         <div className="logo">
-          <span className="dot" /> CRYPTO SCREENER
+          <span className="dot" /> {t("app.title")}
         </div>
         <div className="controls">
           <div className="field">
-            <label>Symbol</label>
+            <label>{t("field.symbol")}</label>
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>
               {SYMBOLS.map((s) => (
                 <option key={s}>{s}</option>
@@ -206,7 +208,7 @@ export default function App() {
             </select>
           </div>
           <div className="field">
-            <label>Exchange</label>
+            <label>{t("field.exchange")}</label>
             <select value={exchange} onChange={(e) => setExchange(e.target.value)}>
               {(cfg?.exchanges || ["okx"]).map((x) => (
                 <option key={x}>{x}</option>
@@ -214,7 +216,7 @@ export default function App() {
             </select>
           </div>
           <div className="field">
-            <label>Timeframe</label>
+            <label>{t("field.timeframe")}</label>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
               {TIMEFRAMES.map((t) => (
                 <option key={t}>{t}</option>
@@ -228,8 +230,15 @@ export default function App() {
               onClick={() => setLive((v) => !v)}
               style={{ color: live ? "var(--green)" : "var(--muted)" }}
             >
-              {live ? "● LIVE" : "○ PAUSED"}
+              {live ? t("live.on") : t("live.off")}
             </button>
+          </div>
+          <div className="field">
+            <label>{t("lang.label")}</label>
+            <select value={lang} onChange={(e) => setLang(e.target.value)}>
+              <option value="ru">RU</option>
+              <option value="en">EN</option>
+            </select>
           </div>
         </div>
       </div>
@@ -238,8 +247,8 @@ export default function App() {
 
       <div className="panel">
         <h3>
-          <span>Multi-pair screener</span>
-          <span className="muted">train &amp; rank all pairs</span>
+          <span>{t("screener.title")}</span>
+          <span className="muted">{t("screener.subtitle")}</span>
         </h3>
         <ScreenerPanel
           symbols={SYMBOLS}
@@ -258,7 +267,7 @@ export default function App() {
               <span>
                 {symbol} · {exchange} · {timeframe}
               </span>
-              <span className="muted">{candles.length} candles</span>
+              <span className="muted">{t("chart.candles", { n: candles.length })}</span>
             </h3>
             <PriceChart
               candles={candles}
@@ -269,7 +278,7 @@ export default function App() {
           </div>
 
           <div className="panel">
-            <h3>Machine-learning signal & training</h3>
+            <h3>{t("ml.title")}</h3>
             <MLPanel
               status={status}
               prediction={prediction}
@@ -284,23 +293,23 @@ export default function App() {
         <div className="col">
           <div className="panel">
             <h3>
-              <span>Trade signal</span>
-              <span className="muted">entry · stop · target</span>
+              <span>{t("signal.title")}</span>
+              <span className="muted">{t("signal.subtitle")}</span>
             </h3>
             <SignalPanel data={signal} loading={signalLoading} />
           </div>
 
           <div className="panel">
             <h3>
-              <span>Order-book density</span>
-              <span className="muted">live walls & heatmap</span>
+              <span>{t("density.title")}</span>
+              <span className="muted">{t("density.subtitle")}</span>
             </h3>
             <DensityPanel ob={ob} />
           </div>
 
           <div className="panel">
             <h3>
-              <span>Cross-exchange comparison</span>
+              <span>{t("compare.title")}</span>
             </h3>
             <ComparePanel data={compare} />
           </div>
@@ -308,9 +317,7 @@ export default function App() {
       </div>
 
       <div className="footer">
-        Data via public CCXT endpoints. Walls = order-book levels whose notional size is a
-        statistical outlier (z-score). ML predicts the next {status?.result?.horizon ?? 12}-candle
-        move (down / flat / up). Not financial advice.
+        {t("footer", { h: status?.result?.horizon ?? 12 })}
       </div>
     </div>
   );

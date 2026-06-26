@@ -1,6 +1,8 @@
 // Multi-pair screener: batch-train all pairs and show per-pair training +
 // trade-accuracy analytics in one table.
 
+import { useT } from "../i18n.jsx";
+
 function fmt(n, d = 1) {
   if (n == null || Number.isNaN(n)) return "—";
   return Number(n).toLocaleString(undefined, {
@@ -17,28 +19,28 @@ export default function ScreenerPanel({
   onSelect,
   current,
 }) {
+  const { t } = useT();
   return (
     <div className="body">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <span className="muted" style={{ fontSize: 12 }}>
-          Train one model per pair on the full history window, then compare accuracy and
-          backtested trade quality.
+          {t("screener.hint")}
         </span>
         <button onClick={onTrainAll} disabled={running}>
           {running && <span className="spinner" />}
-          {running ? "Training all pairs…" : `Train all ${symbols.length} pairs`}
+          {running ? t("screener.training") : t("screener.trainAll", { n: symbols.length })}
         </button>
       </div>
 
       <table>
         <thead>
           <tr>
-            <th>Pair</th>
-            <th>Acc</th>
-            <th>Trades</th>
-            <th>Win-rate</th>
-            <th>Profit factor</th>
-            <th>Expectancy</th>
+            <th>{t("screener.col.pair")}</th>
+            <th>{t("screener.col.acc")}</th>
+            <th>{t("screener.col.trades")}</th>
+            <th>{t("screener.col.winrate")}</th>
+            <th>{t("screener.col.pf")}</th>
+            <th>{t("screener.col.exp")}</th>
           </tr>
         </thead>
         <tbody>
@@ -72,7 +74,7 @@ export default function ScreenerPanel({
                   </td>
                 ) : (
                   <td colSpan={5} className="muted" style={{ textAlign: "left" }}>
-                    not trained
+                    {t("screener.notTrained")}
                   </td>
                 )}
               </tr>

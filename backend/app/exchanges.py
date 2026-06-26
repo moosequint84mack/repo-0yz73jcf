@@ -43,6 +43,8 @@ class ExchangeManager:
         self._ob_cache = _TTLCache(settings.cache_ttl_seconds)
         self._ohlcv_cache = _TTLCache(max(settings.cache_ttl_seconds, 30.0))
         self._ticker_cache = _TTLCache(settings.cache_ttl_seconds)
+        # Leverage / contract metadata changes rarely — cache it for an hour.
+        self._leverage_cache = _TTLCache(3600.0)
         self._init_lock = asyncio.Lock()
 
     async def _client(self, exchange_id: str) -> ccxt.Exchange:
@@ -148,6 +150,84 @@ class ExchangeManager:
         ticker = await client.fetch_ticker(symbol)
         await self._ticker_cache.set(key, ticker)
         return ticker
+
+    @staticmethod
+    def _find_linear_swap(client: ccxt.Exchange, base: str, quote: str = "USDT") -> str | None:
+        """Locate the linear perpetual-swap market for base/quote on a client."""
+        # Prefer the canonical unified symbol when present.
+        canonical = f"{base}/{quote}:{quote}"
+        if canonical in client.markets:
+            return canonical
+        for sym, m in client.markets.items():
+            if (
+                m.get("base") == base
+                and m.get("quote") == quote
+                and m.get("swap")
+                and m.get("linear")
+                and m.get("active", True)
+            ):
+                return sym
+        return None
+
+    async def _exchange_leverage(self, exchange_id: str, base: str) -> dict[str, Any]:
+        """Max leverage for `base`'s linear perpetual swap on one exchange (real data)."""
+        client = await self._client(exchange_id)
+        await self._ensure_markets(client)
+        sym = self._find_linear_swap(client, base)
+        if sym is None:
+            return {"exchange": exchange_id, "available": False, "max_leverage": None}
+        market = client.markets[sym]
+        lev = ((market.get("limits") or {}).get("leverage") or {}).get("max")
+        max_lev = float(lev) if lev else None
+        return {
+            "exchange": exchange_id,
+            "available": max_lev is not None,
+            "symbol": sym,
+            "max_leverage": max_lev,
+            "contract_size": market.get("contractSize"),
+        }
+
+    async def fetch_leverage_info(
+        self, symbol: str, exchange_ids: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Aggregate real per-exchange max leverage for a coin's perpetual swaps.
+
+        Returns the per-exchange breakdown plus a `max_leverage` (highest offered
+        anywhere) and a `typical_leverage` (median of available venues), all taken
+        from live CCXT market metadata — no API keys required.
+        """
+        exchange_ids = exchange_ids or settings.exchanges
+        base = symbol.split("/")[0]
+        key = ("lev", base, tuple(exchange_ids))
+        cached = await self._leverage_cache.get(key)
+        if cached is not None:
+            return cached
+
+        async def _safe(ex_id: str) -> dict[str, Any]:
+            try:
+                return await self._exchange_leverage(ex_id, base)
+            except Exception as exc:  # noqa: BLE001
+                return {"exchange": ex_id, "available": False, "error": str(exc)[:120]}
+
+        per_exchange = await asyncio.gather(*(_safe(e) for e in exchange_ids))
+        offered = [
+            e["max_leverage"] for e in per_exchange if e.get("available") and e.get("max_leverage")
+        ]
+        max_lev = max(offered) if offered else None
+        typical = None
+        if offered:
+            s = sorted(offered)
+            mid = len(s) // 2
+            typical = s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2
+        info = {
+            "base": base,
+            "per_exchange": per_exchange,
+            "venues_with_leverage": len(offered),
+            "max_leverage": max_lev,
+            "typical_leverage": typical,
+        }
+        await self._leverage_cache.set(key, info)
+        return info
 
     async def has_symbol(self, symbol: str, exchange_id: str) -> bool:
         try:
