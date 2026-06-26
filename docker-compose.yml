@@ -2,6 +2,8 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       # REQUIRED in production: a long random string signing JWT tokens.
       SCREENER_JWT_SECRET: ${SCREENER_JWT_SECRET:?set SCREENER_JWT_SECRET in .env}
