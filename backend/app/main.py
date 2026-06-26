@@ -1,18 +1,24 @@
 """FastAPI application entrypoint for the crypto market screener."""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .auth import get_current_user
 from .config import settings
+from .db import init_db
 from .exchanges import manager
-from .routers import market, ml
+from .routers import admin, auth_router, chat, market, ml
+
+logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     yield
     await manager.close()
 
@@ -35,8 +41,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(market.router)
-app.include_router(ml.router)
+_auth = [Depends(get_current_user)]
+app.include_router(auth_router.router)
+app.include_router(admin.router)
+app.include_router(chat.router)
+app.include_router(market.router, dependencies=_auth)
+app.include_router(ml.router, dependencies=_auth)
 
 
 @app.get("/health")

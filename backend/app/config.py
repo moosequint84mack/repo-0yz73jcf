@@ -40,5 +40,27 @@ class Settings(BaseSettings):
     # Where trained ML models are persisted.
     model_dir: str = "models"
 
+    # --- Persistence (users, chat, signals, training runs) ---
+    # SQLAlchemy URL. Defaults to a local SQLite file; override with
+    # SCREENER_DATABASE_URL=postgresql+psycopg://... for a server deployment.
+    database_url: str = "sqlite:///./screener.db"
+
+    # --- Authentication ---
+    # Secret used to sign JWT access tokens. MUST be overridden in production
+    # via SCREENER_JWT_SECRET; a random secret is generated per-process if unset
+    # (which invalidates tokens on restart — fine for dev, not for prod).
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24  # 24h
+
+    # First super-user, seeded at startup if it does not yet exist.
+    # Set both to provision the admin account on a fresh database.
+    admin_email: str = "admin@screener.io"
+    admin_password: str = ""  # if empty, a random one is generated and logged once
+
+    # Whether self-registration is allowed. New accounts are created inactive
+    # and must be activated by a super-user before they can log in.
+    allow_self_registration: bool = True
+
 
 settings = Settings()
