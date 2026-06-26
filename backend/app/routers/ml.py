@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ..config import settings
+from ..db import record_signal, record_training_run
 from ..density import analyze_order_book
 from ..exchanges import manager
 from ..ml.model import store
@@ -76,6 +77,7 @@ async def train(req: TrainRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    record_training_run(req.symbol, req.exchange, req.timeframe, model.result)
     return {
         "key": key,
         "symbol": req.symbol,
@@ -99,6 +101,7 @@ async def train_all(req: TrainAllRequest) -> dict[str, Any]:
             model = await asyncio.to_thread(
                 store.train, candles, key, req.horizon, req.threshold
             )
+            record_training_run(symbol, req.exchange, req.timeframe, model.result)
             bt = model.result.backtest or {}
             results.append(
                 {
@@ -168,6 +171,7 @@ async def signal(req: SignalRequest) -> dict[str, Any]:
         risk_per_trade_pct=req.risk_per_trade_pct,
         leverage_override=req.leverage,
     )
+    record_signal(req.symbol, req.exchange, req.timeframe, plan, prediction)
     return {
         "symbol": req.symbol,
         "exchange": req.exchange,

@@ -10,6 +10,34 @@ import ccxt.async_support as ccxt
 from .config import settings
 
 
+def _maintenance_margin_rate(market: dict[str, Any]) -> float | None:
+    """Best-effort maintenance-margin rate from CCXT market metadata.
+
+    CCXT does not expose a unified field, so we probe the common locations
+    (unified key, then a few raw `info` keys used by major venues). Returns a
+    fraction (e.g. 0.005 = 0.5%) or None when the venue doesn't advertise it.
+    """
+    candidates = [
+        market.get("maintenanceMarginRate"),
+        (market.get("info") or {}).get("maintenanceMarginRate"),
+        (market.get("info") or {}).get("mmr"),
+        (market.get("info") or {}).get("maintMarginPercent"),
+    ]
+    for c in candidates:
+        try:
+            if c is None:
+                continue
+            v = float(c)
+            # Some venues report percent (0.5) rather than a fraction (0.005).
+            if v > 1:
+                v /= 100.0
+            if 0 < v < 1:
+                return v
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 class _TTLCache:
     """Tiny async-safe TTL cache keyed by arbitrary hashable keys."""
 
@@ -185,6 +213,7 @@ class ExchangeManager:
             "symbol": sym,
             "max_leverage": max_lev,
             "contract_size": market.get("contractSize"),
+            "maintenance_margin_rate": _maintenance_margin_rate(market),
         }
 
     async def fetch_leverage_info(
@@ -219,12 +248,24 @@ class ExchangeManager:
             s = sorted(offered)
             mid = len(s) // 2
             typical = s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2
+        # Maintenance margin from the venue offering the highest leverage (the one
+        # a trader would most likely use), else any reported rate.
+        mmr = None
+        for e in per_exchange:
+            if e.get("max_leverage") == max_lev and e.get("maintenance_margin_rate"):
+                mmr = e["maintenance_margin_rate"]
+                break
+        if mmr is None:
+            rates = [e.get("maintenance_margin_rate") for e in per_exchange]
+            rates = [r for r in rates if r]
+            mmr = min(rates) if rates else None
         info = {
             "base": base,
             "per_exchange": per_exchange,
             "venues_with_leverage": len(offered),
             "max_leverage": max_lev,
             "typical_leverage": typical,
+            "maintenance_margin_rate": mmr,
         }
         await self._leverage_cache.set(key, info)
         return info

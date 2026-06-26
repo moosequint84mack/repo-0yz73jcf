@@ -47,7 +47,9 @@ def update_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if user.id == admin.id and req.role == "user":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote yourself")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote yourself"
+        )
     if user.id == admin.id and req.is_active is False:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate yourself"
@@ -72,7 +74,9 @@ def delete_user(
     admin: User = Depends(require_superuser),
 ) -> None:
     if user_id == admin.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself"
+        )
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")

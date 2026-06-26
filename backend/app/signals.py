@@ -35,6 +35,38 @@ def _atr(candles: list[list[float]], period: int = 14) -> float:
     return float(tr[-period:].mean())
 
 
+def _regime(candles: list[list[float]]) -> int:
+    """Trend regime from EMA20/EMA50 separation scaled by ATR.
+
+    Returns 1 (up-trend), -1 (down-trend) or 0 (range), mirroring the backtest
+    filter so the live signal won't fight a strong opposing trend.
+    """
+    if len(candles) < 60:
+        return 0
+    arr = np.array(candles, dtype=float)
+    close = arr[:, 4]
+    ema_fast = _ema(close, 20)
+    ema_slow = _ema(close, 50)
+    atr = _atr(candles)
+    if atr <= 0:
+        return 0
+    sep = (ema_fast - ema_slow) / atr
+    if sep > 0.5:
+        return 1
+    if sep < -0.5:
+        return -1
+    return 0
+
+
+def _ema(values: np.ndarray, span: int) -> float:
+    """Last value of an exponential moving average."""
+    alpha = 2.0 / (span + 1.0)
+    ema = values[0]
+    for v in values[1:]:
+        ema = alpha * v + (1 - alpha) * ema
+    return float(ema)
+
+
 def compute_leveraged_trade(
     action: str,
     entry: float,
@@ -76,7 +108,12 @@ def compute_leveraged_trade(
     profit_usd = notional * reward_frac
     loss_usd = notional * stop_frac  # equals risk_amount by construction
 
-    liq_distance_frac = 1.0 / leverage
+    # Real maintenance-margin rate (MMR): a position is liquidated once losses
+    # consume the initial margin *minus* the exchange's maintenance margin, so the
+    # liquidation sits closer to entry than the naive entry·(1∓1/L). Use the
+    # exchange-reported rate when available, else a typical 0.5% tier.
+    mmr = float((leverage_info or {}).get("maintenance_margin_rate") or 0.005)
+    liq_distance_frac = max(1e-6, 1.0 / leverage - mmr)
     if action == "long":
         liq_price = entry * (1.0 - liq_distance_frac)
         stop_before_liq = stop > liq_price
@@ -99,6 +136,7 @@ def compute_leveraged_trade(
         "loss_usd": round(loss_usd, 2),
         "roe_target_pct": round(reward_frac * leverage * 100, 2),
         "roe_stop_pct": round(-stop_frac * leverage * 100, 2),
+        "maintenance_margin_rate": mmr,
         "liquidation_price": float(liq_price),
         "liquidation_distance_pct": round(liq_distance_frac * 100, 3),
         "stop_before_liquidation": bool(stop_before_liq),
@@ -122,6 +160,7 @@ def build_trade_signal(
     mid = analysis.get("mid") or metrics.get("mid")
     imbalance = float(metrics.get("imbalance") or 0.0)
     atr = _atr(candles)
+    regime = _regime(candles)
 
     rationale: list[str] = []
 
@@ -198,12 +237,30 @@ def build_trade_signal(
     elif score <= -1.5:
         action = "short"
 
+    # ---- Market-regime filter ------------------------------------------
+    # Don't fight a strong opposing trend (long in a down-trend / vice versa).
+    regime_label = {1: "up-trend", -1: "down-trend", 0: "range"}[regime]
+    vetoed_by_regime = False
+    if action == "long" and regime == -1:
+        vetoed_by_regime = True
+    elif action == "short" and regime == 1:
+        vetoed_by_regime = True
+    if vetoed_by_regime:
+        rationale.append(
+            f"Regime filter: market is in a {regime_label}; vetoing counter-trend "
+            f"{action} → flat."
+        )
+        action = "flat"
+
     # ---- Build the trade plan ------------------------------------------
     plan: dict[str, Any] = {
         "action": action,
+        "confluence": round(float(score), 3),
         "mid": mid,
         "imbalance": imbalance,
         "atr": atr,
+        "regime": regime,
+        "regime_label": regime_label,
         "ml_direction": ml_dir,
         "ml_confidence": ml_conf,
         "bounce": bounce,

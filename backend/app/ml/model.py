@@ -15,7 +15,13 @@ from typing import Any
 import joblib
 import numpy as np
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
 
 from ..backtest import run_backtest
 from ..config import settings
@@ -41,6 +47,9 @@ class TrainResult:
     trained_at: float = field(default_factory=time.time)
     label_distribution: dict[str, int] = field(default_factory=dict)
     backtest: dict[str, Any] = field(default_factory=dict)
+    walk_forward: dict[str, Any] = field(default_factory=dict)
+    calibrated: bool = False
+    label_mode: str = "triple_barrier"
 
 
 @dataclass
@@ -49,6 +58,9 @@ class TrainedModel:
     feature_columns: list[str]
     result: TrainResult
     key: str
+    # Calibrated probability estimator (CalibratedClassifierCV) used for
+    # predict_proba; falls back to the raw clf when calibration is unavailable.
+    predictor: Any = None
 
 
 class ModelStore:
@@ -87,8 +99,11 @@ class ModelStore:
         key: str,
         horizon: int = 12,
         threshold: float = 0.004,
+        label_mode: str = "triple_barrier",
     ) -> TrainedModel:
-        feats, labels, df = build_dataset(candles, horizon=horizon, threshold=threshold)
+        feats, labels, df = build_dataset(
+            candles, horizon=horizon, threshold=threshold, label_mode=label_mode
+        )
         if len(feats) < 200:
             raise ValueError(
                 f"Not enough usable candles to train ({len(feats)} rows after cleaning). "
@@ -100,9 +115,11 @@ class ModelStore:
         y = labels.to_numpy()
 
         # Time-ordered split — never shuffle financial time series.
-        split = int(len(X) * 0.8)
-        X_train, X_test = X[:split], X[split:]
-        y_train, y_test = y[:split], y[split:]
+        # train (fit) -> calib (early-stopping + probability calibration) -> test.
+        fit_end = int(len(X) * 0.70)
+        calib_end = int(len(X) * 0.85)
+        X_train, X_calib, X_test = X[:fit_end], X[fit_end:calib_end], X[calib_end:]
+        y_train, y_calib, y_test = y[:fit_end], y[fit_end:calib_end], y[calib_end:]
 
         classes = sorted(np.unique(y).tolist())
         # Balance classes (flat usually dominates).
@@ -128,10 +145,11 @@ class ModelStore:
             verbose=-1,
         )
         eval_result: dict[str, Any] = {}
+        # Early stopping uses the calibration slice, NOT the test set (no leakage).
         clf.fit(
             X_train,
             y_train,
-            eval_set=[(X_test, y_test)],
+            eval_set=[(X_calib, y_calib)],
             eval_metric="multi_logloss",
             callbacks=[
                 early_stopping(stopping_rounds=60, verbose=False),
@@ -140,12 +158,29 @@ class ModelStore:
             ],
         )
 
-        y_pred = clf.predict(X_test)
+        # Probability calibration (isotonic, falling back to sigmoid) on the held-out
+        # calibration slice so confidence thresholds are meaningful.
+        predictor: Any = clf
+        calibrated = False
+        for method in ("isotonic", "sigmoid"):
+            try:
+                cal = CalibratedClassifierCV(clf, method=method, cv="prefit")
+                cal.fit(X_calib, y_calib)
+                predictor = cal
+                calibrated = True
+                break
+            except Exception:
+                continue
+
+        y_pred = predictor.predict(X_test)
         acc = float(accuracy_score(y_test, y_pred))
 
+        # Walk-forward (expanding-window) out-of-sample validation across folds.
+        walk_forward = _walk_forward(X, y, classes, class_weight)
+
         # Out-of-sample trade backtest: replay test-set predictions as bracket trades.
-        test_positions = feats.index.to_numpy()[split:]
-        proba_test = clf.predict_proba(X_test)
+        test_positions = feats.index.to_numpy()[calib_end:]
+        proba_test = predictor.predict_proba(X_test)
         backtest = run_backtest(
             df,
             test_positions,
@@ -170,6 +205,8 @@ class ModelStore:
                 reverse=True,
             )
         )
+        # `clf` keeps full-tree count; record how many trees survived early stopping.
+        _ = getattr(clf, "best_iteration_", None)
         curve = [
             {"iteration": i, "val_logloss": float(v)}
             for i, v in enumerate(eval_result.get("multi_logloss", []))
@@ -194,9 +231,16 @@ class ModelStore:
             threshold=threshold,
             label_distribution=label_dist,
             backtest=backtest,
+            walk_forward=walk_forward,
+            calibrated=calibrated,
+            label_mode=label_mode,
         )
         model = TrainedModel(
-            clf=clf, feature_columns=feature_columns, result=result, key=key
+            clf=clf,
+            feature_columns=feature_columns,
+            result=result,
+            key=key,
+            predictor=predictor,
         )
         with self._lock:
             self._models[key] = model
@@ -210,8 +254,9 @@ class ModelStore:
         if latest.empty:
             raise ValueError("Could not build features from the supplied candles.")
         row = latest.iloc[[-1]].to_numpy()
-        proba = model.clf.predict_proba(row)[0]
-        classes = list(model.clf.classes_)
+        predictor = getattr(model, "predictor", None) or model.clf
+        proba = predictor.predict_proba(row)[0]
+        classes = list(predictor.classes_)
         probs = {CLASS_NAMES[int(c)]: float(p) for c, p in zip(classes, proba, strict=True)}
         pred_class = int(classes[int(np.argmax(proba))])
         return {
@@ -224,6 +269,75 @@ class ModelStore:
             "horizon": model.result.horizon,
             "threshold": model.result.threshold,
         }
+
+
+def _walk_forward(
+    X: np.ndarray,
+    y: np.ndarray,
+    classes: list[int],
+    class_weight: dict[int, float],
+    n_splits: int = 4,
+) -> dict[str, Any]:
+    """Expanding-window walk-forward validation.
+
+    Splits the series into ``n_splits + 1`` contiguous blocks; fold *k* trains on
+    blocks ``0..k`` and tests on block ``k+1`` (always forward in time), so every
+    score is genuinely out-of-sample. A lighter LightGBM is used for speed. The
+    mean accuracy / macro-F1 across folds is a far more honest estimate of live
+    performance than a single train/test split.
+    """
+    n = len(X)
+    block = n // (n_splits + 1)
+    if block < 80:
+        return {"folds": [], "note": "series too short for walk-forward"}
+
+    folds: list[dict[str, float]] = []
+    for k in range(1, n_splits + 1):
+        tr_end = block * k
+        te_end = block * (k + 1) if k < n_splits else n
+        X_tr, y_tr = X[:tr_end], y[:tr_end]
+        X_te, y_te = X[tr_end:te_end], y[tr_end:te_end]
+        present = set(np.unique(y_tr).tolist())
+        if len(X_te) < 20 or len(present) < 2:
+            continue
+        fold_weight = {c: w for c, w in class_weight.items() if c in present}
+        clf = LGBMClassifier(
+            n_estimators=300,
+            learning_rate=0.05,
+            num_leaves=32,
+            min_child_samples=60,
+            subsample=0.8,
+            subsample_freq=1,
+            colsample_bytree=0.7,
+            reg_alpha=0.2,
+            reg_lambda=1.5,
+            class_weight=fold_weight,
+            random_state=42,
+            n_jobs=-1,
+            verbose=-1,
+        )
+        clf.fit(X_tr, y_tr)
+        pred = clf.predict(X_te)
+        folds.append(
+            {
+                "fold": k,
+                "n_train": int(len(X_tr)),
+                "n_test": int(len(X_te)),
+                "accuracy": float(accuracy_score(y_te, pred)),
+                "macro_f1": float(
+                    f1_score(y_te, pred, labels=classes, average="macro", zero_division=0)
+                ),
+            }
+        )
+
+    if not folds:
+        return {"folds": []}
+    return {
+        "folds": folds,
+        "mean_accuracy": float(np.mean([f["accuracy"] for f in folds])),
+        "std_accuracy": float(np.std([f["accuracy"] for f in folds])),
+        "mean_macro_f1": float(np.mean([f["macro_f1"] for f in folds])),
+    }
 
 
 def _record_eval(store: dict[str, Any]):

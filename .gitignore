@@ -10,6 +10,11 @@ node_modules/
 dist/
 .vite/
 
+# Databases (local runtime state)
+*.db
+*.sqlite
+*.sqlite3
+
 # Env / OS
 .env
 .DS_Store

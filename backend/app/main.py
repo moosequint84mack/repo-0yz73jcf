@@ -11,7 +11,7 @@ from .auth import get_current_user
 from .config import settings
 from .db import init_db
 from .exchanges import manager
-from .routers import admin, auth_router, chat, market, ml
+from .routers import admin, auth_router, chat, market, metrics, ml
 
 logging.basicConfig(level=logging.INFO)
 
@@ -47,6 +47,7 @@ app.include_router(admin.router)
 app.include_router(chat.router)
 app.include_router(market.router, dependencies=_auth)
 app.include_router(ml.router, dependencies=_auth)
+app.include_router(metrics.router, dependencies=_auth)
 
 
 @app.get("/health")

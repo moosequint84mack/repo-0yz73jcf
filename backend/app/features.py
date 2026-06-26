@@ -134,16 +134,97 @@ def make_labels(
     return labels
 
 
+def make_labels_triple_barrier(
+    df: pd.DataFrame,
+    horizon: int = 12,
+    threshold: float = 0.004,
+    atr_mult: float = 1.0,
+) -> pd.Series:
+    """Triple-barrier labels (López de Prado): first touch of up/down barrier wins.
+
+    For each candle an upper and lower barrier are placed at ``±width`` and the
+    following ``horizon`` candles are walked bar by bar. The label is the side of
+    the barrier touched *first* (2=up, 0=down); if neither is touched before the
+    vertical (time) barrier, the candle is flat (1). Barrier width is the larger
+    of ``threshold`` and a volatility-scaled ``atr_mult * ATR%`` so labels adapt
+    to each coin's regime instead of a fixed percentage. Rows whose horizon runs
+    past the end of the series (incomplete window, untouched) are marked -1.
+    """
+    close = df["close"].to_numpy(dtype=float)
+    high = df["high"].to_numpy(dtype=float)
+    low = df["low"].to_numpy(dtype=float)
+    n = len(close)
+    atr = _atr(df["high"], df["low"], df["close"], 14).to_numpy(dtype=float)
+    labels = np.full(n, -1, dtype=np.int64)
+
+    for i in range(n - 1):
+        entry = close[i]
+        if entry <= 0:
+            continue
+        width = threshold
+        if atr_mult > 0 and not np.isnan(atr[i]):
+            width = max(threshold, atr_mult * atr[i] / entry)
+        up = entry * (1.0 + width)
+        dn = entry * (1.0 - width)
+        end = min(i + horizon, n - 1)
+        touched = 1  # vertical barrier -> flat
+        for j in range(i + 1, end + 1):
+            if high[j] >= up:
+                touched = 2
+                break
+            if low[j] <= dn:
+                touched = 0
+                break
+        # Incomplete window that never touched a barrier is unusable.
+        if touched == 1 and end < i + horizon:
+            touched = -1
+        labels[i] = touched
+    return pd.Series(labels, index=df.index)
+
+
+def market_regime(df: pd.DataFrame) -> pd.DataFrame:
+    """Trend vs range classification per candle.
+
+    Returns a frame with ``trend_strength`` (|EMA20-EMA50| / ATR) and an integer
+    ``regime`` in {-1 down-trend, 0 range, 1 up-trend}. A position is "trending"
+    when fast/slow EMA separation exceeds ~0.5 ATR.
+    """
+    close = df["close"]
+    ema_fast = close.ewm(span=20, adjust=False).mean()
+    ema_slow = close.ewm(span=50, adjust=False).mean()
+    atr = _atr(df["high"], df["low"], df["close"], 14)
+    sep = (ema_fast - ema_slow) / atr.replace(0, np.nan)
+    strength = sep.abs()
+    regime = pd.Series(0, index=df.index, dtype="int64")
+    regime[sep > 0.5] = 1
+    regime[sep < -0.5] = -1
+    out = pd.DataFrame({"trend_strength": strength, "regime": regime})
+    return out.replace([np.inf, -np.inf], np.nan)
+
+
 FEATURE_COLUMNS_CACHE: list[str] | None = None
 
 
 def build_dataset(
-    candles: list[list[float]], horizon: int = 12, threshold: float = 0.004
+    candles: list[list[float]],
+    horizon: int = 12,
+    threshold: float = 0.004,
+    label_mode: str = "triple_barrier",
+    atr_mult: float = 1.0,
 ) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
-    """Return (features, labels, full_df) aligned and cleaned for training."""
+    """Return (features, labels, full_df) aligned and cleaned for training.
+
+    ``label_mode`` selects "triple_barrier" (default, first-touch) or "fixed"
+    (legacy forward-return-over-horizon) labeling.
+    """
     df = candles_to_df(candles)
     feats = compute_features(df)
-    labels = make_labels(df, horizon=horizon, threshold=threshold)
+    if label_mode == "fixed":
+        labels = make_labels(df, horizon=horizon, threshold=threshold)
+    else:
+        labels = make_labels_triple_barrier(
+            df, horizon=horizon, threshold=threshold, atr_mult=atr_mult
+        )
     mask = labels >= 0
     feats_valid = feats[mask].dropna()
     labels_valid = labels.loc[feats_valid.index]

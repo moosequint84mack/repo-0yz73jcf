@@ -16,6 +16,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .features import _atr, market_regime
+
 
 def _max_drawdown(equity: list[float]) -> float:
     """Largest peak-to-trough drop of a cumulative-return equity curve (%)."""
@@ -36,6 +38,10 @@ def run_backtest(
     threshold: float,
     confidence: float = 0.45,
     reward_ratio: float = 1.5,
+    fee_pct: float = 0.05,
+    slippage_pct: float = 0.02,
+    atr_stop_mult: float = 1.5,
+    use_regime_filter: bool = True,
 ) -> dict[str, Any]:
     """Replay predictions on the test segment with a bracket (stop/target) exit.
 
@@ -45,22 +51,39 @@ def run_backtest(
         proba: predict_proba output aligned 1:1 with ``test_positions``.
         classes: class labels in the column order of ``proba`` (0=down,1=flat,2=up).
         horizon: max bars a trade is held before exiting at market.
-        threshold: fractional risk per trade (e.g. 0.005 = 0.5%); also the stop distance.
+        threshold: minimum fractional stop distance (floor for the ATR stop).
         confidence: minimum predicted probability required to take a trade.
         reward_ratio: take-profit distance as a multiple of the stop distance.
+        fee_pct: exchange fee per side, in percent (round-trip = 2x).
+        slippage_pct: assumed slippage per side, in percent (round-trip = 2x).
+        atr_stop_mult: stop distance = max(threshold, atr_stop_mult * ATR%); a
+            volatility-adaptive stop instead of a fixed percentage.
+        use_regime_filter: skip trades taken *against* a strong opposing trend
+            (long in a down-trend / short in an up-trend).
     """
     close = df["close"].to_numpy(dtype=float)
     high = df["high"].to_numpy(dtype=float)
     low = df["low"].to_numpy(dtype=float)
     n = len(close)
+    atr_pct = (_atr(df["high"], df["low"], df["close"], 14) / df["close"]).to_numpy(dtype=float)
+    regime = market_regime(df)["regime"].to_numpy(dtype=float)
+
+    # Round-trip cost as a fraction of notional (entry + exit fees + slippage).
+    cost_frac = 2.0 * (fee_pct + slippage_pct) / 100.0
 
     class_idx = {c: i for i, c in enumerate(classes)}
     up_col = class_idx.get(2)
     down_col = class_idx.get(0)
 
     trades: list[dict[str, Any]] = []
+    skipped_regime = 0
+    # No pyramiding: once a trade is open, ignore new signals until it exits, so
+    # trade counts and the equity curve reflect non-overlapping positions.
+    next_allowed_pos = -1
     for k, pos in enumerate(test_positions):
         pos = int(pos)
+        if pos < next_allowed_pos:
+            continue
         p = proba[k]
         p_up = float(p[up_col]) if up_col is not None else 0.0
         p_down = float(p[down_col]) if down_col is not None else 0.0
@@ -74,15 +97,26 @@ def run_backtest(
         else:
             continue
 
+        # Regime filter: don't fight a strong opposing trend.
+        if use_regime_filter and pos < len(regime):
+            reg = regime[pos]
+            if (direction == 1 and reg == -1) or (direction == -1 and reg == 1):
+                skipped_regime += 1
+                continue
+
         entry = close[pos]
         if entry <= 0:
             continue
+        # Volatility-adaptive stop (ATR), floored at `threshold`.
+        a = atr_pct[pos] if pos < len(atr_pct) and not np.isnan(atr_pct[pos]) else threshold
+        stop_frac = max(threshold, atr_stop_mult * a)
+        tgt_frac = stop_frac * reward_ratio
         if direction == 1:
-            stop = entry * (1 - threshold)
-            target = entry * (1 + threshold * reward_ratio)
+            stop = entry * (1 - stop_frac)
+            target = entry * (1 + tgt_frac)
         else:
-            stop = entry * (1 + threshold)
-            target = entry * (1 - threshold * reward_ratio)
+            stop = entry * (1 + stop_frac)
+            target = entry * (1 - tgt_frac)
 
         exit_ret = None
         held = 0
@@ -92,23 +126,29 @@ def run_backtest(
             if direction == 1:
                 # Conservative: if a bar spans both levels, assume stop hit first.
                 if lo <= stop:
-                    exit_ret = -threshold
+                    exit_ret = -stop_frac
                     break
                 if hi >= target:
-                    exit_ret = threshold * reward_ratio
+                    exit_ret = tgt_frac
                     break
             else:
                 if hi >= stop:
-                    exit_ret = -threshold
+                    exit_ret = -stop_frac
                     break
                 if lo <= target:
-                    exit_ret = threshold * reward_ratio
+                    exit_ret = tgt_frac
                     break
         if exit_ret is None:
             # Timed out: exit at the close `horizon` bars later.
             exit_pos = min(pos + horizon, n - 1)
             exit_ret = (close[exit_pos] / entry - 1) * direction
             held = exit_pos - pos
+
+        # Block new entries until this position has exited (no pyramiding).
+        next_allowed_pos = pos + held + 1
+
+        # Apply round-trip transaction costs.
+        exit_ret -= cost_frac
 
         trades.append(
             {
@@ -120,7 +160,11 @@ def run_backtest(
             }
         )
 
-    return _summarize(trades, reward_ratio, confidence)
+    summary = _summarize(trades, reward_ratio, confidence)
+    summary["skipped_by_regime"] = skipped_regime
+    summary["cost_pct_round_trip"] = round(cost_frac * 100, 4)
+    summary["atr_stop_mult"] = atr_stop_mult
+    return summary
 
 
 def _summarize(
