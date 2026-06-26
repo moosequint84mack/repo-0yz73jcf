@@ -62,5 +62,20 @@ class Settings(BaseSettings):
     # and must be activated by a super-user before they can log in.
     allow_self_registration: bool = True
 
+    # --- Continuous self-learning ---
+    # The screener retrains every pair on a fixed cadence so models keep adapting
+    # to fresh market data without any manual "Train" click.
+    autotrain_enabled: bool = True
+    # Minutes between full retraining cycles of all screener symbols.
+    autotrain_interval_minutes: int = 60
+    # Wait this many seconds after startup before the first retraining cycle so
+    # the API is responsive immediately on boot.
+    autotrain_initial_delay_seconds: int = 30
+    # Pairs the continuous trainer (and screener) operate on.
+    screener_symbols: list[str] = [
+        "BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "DOGE/USDT",
+        "ADA/USDT", "AVAX/USDT", "LINK/USDT", "DOT/USDT", "LTC/USDT", "TRX/USDT",
+    ]
+
 
 settings = Settings()

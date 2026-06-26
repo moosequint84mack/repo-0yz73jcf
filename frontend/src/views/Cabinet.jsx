@@ -27,6 +27,7 @@ export default function Cabinet() {
   const { user } = useAuth();
   const [overview, setOverview] = useState(null);
   const [signals, setSignals] = useState(null);
+  const [auto, setAuto] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -40,6 +41,23 @@ export default function Cabinet() {
       .catch((e) => alive && setError(e.message));
     return () => {
       alive = false;
+    };
+  }, []);
+
+  // Poll the continuous self-learning status so users can see the system is
+  // retraining on its own (next cycle, last result, current pair).
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      api
+        .autotrain()
+        .then((a) => alive && setAuto(a))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 15000);
+    return () => {
+      alive = false;
+      clearInterval(id);
     };
   }, []);
 
@@ -82,6 +100,59 @@ export default function Cabinet() {
           </div>
         </div>
       </div>
+
+      {auto && (
+        <div className="panel">
+          <h3>{t("auto.title")}</h3>
+          <div className="body">
+            <div className="chips">
+              <div className="chip">
+                <div className="k">{t("auto.enabled")}</div>
+                <div className={auto.enabled ? "v green" : "v"}>
+                  {auto.enabled ? t("auto.on") : t("auto.off")}
+                </div>
+              </div>
+              <div className="chip">
+                <div className="k">{t("auto.interval")}</div>
+                <div className="v">
+                  {t("auto.intervalVal", { n: auto.interval_minutes })}
+                </div>
+              </div>
+              <div className="chip">
+                <div className="k">{t("auto.cycle")}</div>
+                <div className="v">{auto.cycle ?? 0}</div>
+              </div>
+              <div className="chip">
+                <div className="k">{t("auto.lastRun")}</div>
+                <div className="v">
+                  {auto.last_finished_at
+                    ? fmtTime(new Date(auto.last_finished_at * 1000).toISOString())
+                    : t("auto.never")}
+                </div>
+              </div>
+              <div className="chip">
+                <div className="k">{t("auto.nextRun")}</div>
+                <div className="v">
+                  {auto.next_run_at
+                    ? fmtTime(new Date(auto.next_run_at * 1000).toISOString())
+                    : "—"}
+                </div>
+              </div>
+            </div>
+            <div className="muted" style={{ marginTop: 8 }}>
+              {auto.running
+                ? t("auto.running", { symbol: auto.current_symbol || "" })
+                : t("auto.idle")}
+              {auto.last_finished_at
+                ? ` · ${t("auto.lastResult", {
+                    ok: auto.last_trained,
+                    failed: auto.last_failed,
+                  })}`
+                : ""}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="panel">
         <h3>{t("cabinet.perPair")}</h3>

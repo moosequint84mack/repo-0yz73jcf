@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .. import autotrain
 from ..config import settings
 from ..db import record_signal, record_training_run
 from ..density import analyze_order_book
@@ -16,6 +17,12 @@ from ..ml.model import store
 from ..signals import build_trade_signal
 
 router = APIRouter(prefix="/api/ml", tags=["ml"])
+
+
+@router.get("/autotrain")
+async def autotrain_status() -> dict[str, Any]:
+    """Status of the continuous self-learning loop (last/next cycle, per-pair)."""
+    return autotrain.state
 
 
 class TrainRequest(BaseModel):

@@ -1,12 +1,14 @@
 """FastAPI application entrypoint for the crypto market screener."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import autotrain
 from .auth import get_current_user
 from .config import settings
 from .db import init_db
@@ -19,7 +21,16 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    task: asyncio.Task | None = None
+    if settings.autotrain_enabled:
+        task = asyncio.create_task(autotrain.run_loop())
     yield
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await manager.close()
 
 

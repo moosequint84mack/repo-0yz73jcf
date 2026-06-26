@@ -77,6 +77,7 @@ export const api = {
     req(
       `/api/ml/status?symbol=${encodeURIComponent(symbol)}&exchange=${exchange}&timeframe=${timeframe}`
     ),
+  autotrain: () => req("/api/ml/autotrain"),
 
   // --- cabinet metrics ---
   metricsOverview: () => req("/api/metrics/overview"),
