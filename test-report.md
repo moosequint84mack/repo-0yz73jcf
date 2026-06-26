@@ -1,30 +1,30 @@
-# Crypto Screener — Trade Signals, Multi-Pair & Backtest Test Report
+# Крипто-скринер — отчёт о тестировании сделок, мультипар и бэктеста
 
-**Build:** branch `devin/crypto-screener-mvp` (PR #7) · backend FastAPI `:8000` · frontend Vite `:5173`
-**Data:** live public CCXT endpoints (okx/kraken/kucoin/coinbase/mexc) · history window **16,000** 5m candles (~2 months)
-**Scope of this iteration:** +6 pairs (→12), trade-signal engine (entry/stop/target), out-of-sample backtest, batch training, live signal polling.
-
----
-
-## Summary — all golden-path tests passed
-
-| # | Test | Result |
-|---|------|--------|
-| 1 | Train all 12 pairs and rank by accuracy + backtest quality | **PASS** |
-| 2 | Emit a live LONG/SHORT trade plan (entry/stop/target, R:R) | **PASS** |
-| 3 | Report out-of-sample backtest metrics per pair | **PASS** |
-| 4 | Live order-book density heatmap + 5-exchange spread | **PASS** |
-
-No escalations. A full annotated screen recording of the run is attached to the Devin session message.
+**Сборка:** ветка `devin/crypto-screener-mvp` (PR #7) · бэкенд FastAPI `:8000` · фронтенд Vite `:5173`
+**Данные:** живые публичные эндпоинты CCXT (okx/kraken/kucoin/coinbase/mexc) · окно истории **16 000** свечей 5m (~2 месяца)
+**Объём этой итерации:** +6 пар (→12), движок торговых сигналов (вход/стоп/тейк), бэктест вне выборки, пакетное обучение, live-опрос сигналов.
 
 ---
 
-## Training & backtest analytics (all 12 pairs, 16k-candle history)
+## Итог — все ключевые тесты пройдены
 
-Each pair = one LightGBM 3-class model (down/flat/up), time-ordered 80/20 split (~12.7k train / 3.2k test rows). Backtest = test-set predictions replayed as bracket trades (stop behind protective wall, target = 1.5× risk).
+| № | Тест | Результат |
+|---|------|-----------|
+| 1 | Обучить все 12 пар и ранжировать по точности + качеству бэктеста | **ПРОЙДЕН** |
+| 2 | Выдать живой план сделки LONG/SHORT (вход/стоп/тейк, R:R) | **ПРОЙДЕН** |
+| 3 | Показать метрики бэктеста вне выборки по каждой паре | **ПРОЙДЕН** |
+| 4 | Живая тепловая карта плотностей стакана + спред по 5 биржам | **ПРОЙДЕН** |
 
-| Pair | Accuracy | Trades | Win-rate | Profit factor | Expectancy | Max DD |
-|------|----------|--------|----------|---------------|------------|--------|
+Без эскалаций. Полная видеозапись прохода с аннотациями приложена к сообщению в сессии Devin.
+
+---
+
+## Аналитика обучения и бэктеста (все 12 пар, история 16 000 свечей)
+
+Каждая пара = одна модель LightGBM с 3 классами (вниз/флэт/вверх), разбиение по времени 80/20 (~12,7 тыс. обучающих / 3,2 тыс. тестовых строк). Бэктест = прогнозы на тест-сете, проигранные как bracket-сделки (стоп за защитной стенкой, тейк = 1,5× риска).
+
+| Пара | Точность | Сделки | Win-rate | Profit factor | Ожидание (exp.) | Макс. просадка |
+|------|----------|--------|----------|---------------|-----------------|----------------|
 | **XRP/USDT** | 43.6% | 208 | **54.3%** | **1.79** | **+0.132%** | -5.2% |
 | **LINK/USDT** | 41.3% | 269 | 51.7% | 1.47 | +0.084% | — |
 | **TRX/USDT** | 92.6%* | 99 | 57.6% | 2.29 | +0.061% | — |
@@ -38,50 +38,49 @@ Each pair = one LightGBM 3-class model (down/flat/up), time-ordered 80/20 split 
 | ADA/USDT | 36.0% | 0 | — | — | — | — |
 | AVAX/USDT | 33.2% | 0 | — | — | — | — |
 
-\* TRX's 92.6% reflects a very flat-dominated label distribution (most moves stay inside the ±0.4% band), so the classifier scores high by predicting "flat"; its **99 trades / PF 2.29** is the more meaningful quality signal.
+\* 92.6% у TRX отражают сильно «флэтовое» распределение меток (большинство движений остаются внутри коридора ±0.4%), поэтому классификатор получает высокий балл, предсказывая «флэт»; его **99 сделок / PF 2.29** — более показательный сигнал качества.
 
-**How accurate are the trades?** Profit factor (gross win $ / gross loss $) is the headline metric:
-- **Profitable (PF > 1):** XRP (1.79), LINK (1.47), TRX (2.29), BNB (1.11), LTC (1.09), DOT (1.03), ETH (1.02) — 7 of 9 trading pairs.
-- **Breakeven:** DOGE (1.00).
-- **Unprofitable (PF < 1):** BTC (0.83) — high-trade-count, low-edge regime in this window.
-- **0-trade pairs (SOL/ADA/AVAX):** the engine found **no** test-set bounce that aligned with ML bias, so it correctly stayed FLAT — by design, not a failure.
-
----
-
-## Test 1 — Multi-pair screener (rank 12 pairs)
-
-`Train all 12 pairs` trained one model per symbol (~210s) and populated the ranking table with accuracy, trade count, win-rate, profit factor and expectancy. Clicking a row loads that pair's chart/signal/backtest.
-
-![Screener table — 12 pairs ranked](https://app.devin.ai/attachments/5c940c6f-c6a5-47ff-b383-1853685aec95/ss_77a76463.png)
+**Насколько точны сделки?** Profit factor (валовая прибыль $ / валовой убыток $) — главная метрика:
+- **Прибыльны (PF > 1):** XRP (1.79), LINK (1.47), TRX (2.29), BNB (1.11), LTC (1.09), DOT (1.03), ETH (1.02) — **7 из 9** торгующих пар.
+- **Безубыток:** DOGE (1.00).
+- **Убыточны (PF < 1):** BTC (0.83) — режим с большим числом сделок и низким преимуществом в этом окне.
+- **Пары с 0 сделок (SOL/ADA/AVAX):** движок **не нашёл** на тест-сете отскока, совпавшего с прогнозом ML, поэтому корректно остался вне рынка (FLAT) — так задумано, это не ошибка.
 
 ---
 
-## Test 2 — Live trade plan (entry / stop / target)
+## Тест 1 — Мультипарный скринер (ранжирование 12 пар)
 
-The signal engine fuses **bounce-off-density + ML bias + book imbalance** into a confluence score (LONG ≥ 1.5, SHORT ≤ -1.5, else FLAT). The "WHY (confluence)" block shows exactly why a plan was or wasn't issued. Below, BTC sits on a bid wall (z=4.5) but ML leans DOWN (46%) → the two disagree, so the engine correctly returns **NO TRADE** with the full rationale. (A live BTC **SHORT** plan — entry 60,181 / stop 60,275 / target 60,040, R:R 1:1.5 — was captured in the recording.)
+Кнопка `Train all 12 pairs` обучила по одной модели на символ (~210 с) и заполнила таблицу ранжирования точностью, числом сделок, win-rate, profit factor и ожиданием. Клик по строке загружает график/сигнал/бэктест выбранной пары.
 
-![BTC confluence rationale](https://app.devin.ai/attachments/5beb8367-519c-4513-9edc-ab2a72f7476d/ss_dd9c9798.png)
-
----
-
-## Test 3 — Out-of-sample backtest per pair
-
-Selecting XRP (best out-of-sample pair) shows its backtest block: **208 trades, 54.3% win-rate, 1.79 profit factor, +0.132% expectancy, -5.2% max drawdown, 0.28 sharpe-like**, alongside the confusion matrix and learning curve.
-
-![XRP backtest metrics + density heatmap](https://app.devin.ai/attachments/6409d22b-b1b7-4425-883d-661e00e9ba54/ss_27c5adc6.png)
+![Таблица скринера — 12 пар по рангу](https://app.devin.ai/attachments/5c940c6f-c6a5-47ff-b383-1853685aec95/ss_77a76463.png)
 
 ---
 
-## Test 4 — Live density heatmap + cross-exchange spread
+## Тест 2 — Живой план сделки (вход / стоп / тейк)
 
-The order-book panel renders bid/ask walls as a live heatmap (red asks / green bids) with mid, spread, imbalance and wall counts refreshing every ~4s. The cross-exchange table compares the same symbol across all 5 venues and flags cheapest→priciest for a naive arbitrage hint (see screenshot above; e.g. BTC `coinbase → okx`, 0.10% spread).
+Движок сигналов объединяет **отскок от плотности + bias ML + дисбаланс стакана** в confluence-скор (LONG ≥ 1.5, SHORT ≤ -1.5, иначе FLAT). Блок «WHY (confluence)» показывает, почему план был выдан или нет. Ниже: BTC стоит на бид-стенке (z=4.5), но ML склоняется к DOWN (46%) → они расходятся, поэтому движок корректно возвращает **NO TRADE** с полным обоснованием. (Живой план BTC **SHORT** — вход 60 181 / стоп 60 275 / тейк 60 040, R:R 1:1.5 — записан в видео.)
+
+![Обоснование confluence по BTC](https://app.devin.ai/attachments/5beb8367-519c-4513-9edc-ab2a72f7476d/ss_dd9c9798.png)
 
 ---
 
-## Notes / known behaviour (not defects)
+## Тест 3 — Бэктест вне выборки по каждой паре
 
-- **Binance/Bybit excluded** — returned HTTP 451 (geo-block) from this environment; the 5 working public venues are used instead.
-- **0-trade pairs** are expected when density and ML never align on the test set — staying flat is the correct, conservative outcome.
-- **Accuracy ~33–62% (TRX aside)** is normal for next-move classification on noisy 5m microstructure; the backtest profit-factor/expectancy are the trade-quality metrics that matter, and 7/9 trading pairs are profitable.
-- Signals are analytical only — **no orders are placed. Not financial advice.**
-</content>
+Выбор XRP (лучшая пара вне выборки) показывает её блок бэктеста: **208 сделок, win-rate 54.3%, profit factor 1.79, ожидание +0.132%, макс. просадка -5.2%, sharpe-like 0.28**, рядом — матрица ошибок и кривая обучения.
+
+![Метрики бэктеста XRP + тепловая карта плотностей](https://app.devin.ai/attachments/6409d22b-b1b7-4425-883d-661e00e9ba54/ss_27c5adc6.png)
+
+---
+
+## Тест 4 — Живая тепловая карта плотностей + кросс-биржевой спред
+
+Панель стакана отображает бид/аск-стенки как живую тепловую карту (красные аски / зелёные биды) с mid, спредом, дисбалансом и счётчиком стенок, обновляясь каждые ~4 с. Кросс-биржевая таблица сравнивает один и тот же символ по всем 5 площадкам и помечает дешевле→дороже как наивную арбитражную подсказку (см. скриншот выше; напр., BTC `coinbase → okx`, спред 0.10%).
+
+---
+
+## Примечания / ожидаемое поведение (не дефекты)
+
+- **Binance/Bybit исключены** — отдавали HTTP 451 (геоблок) из этого окружения; вместо них используются 5 рабочих публичных площадок.
+- **Пары с 0 сделок** — ожидаемо, когда плотность и ML ни разу не совпали на тест-сете; остаться вне рынка — корректный консервативный исход.
+- **Точность ~33–62% (кроме TRX)** нормальна для классификации следующего движения на шумной микроструктуре 5m; качество сделок измеряют profit factor/ожидание бэктеста, и 7 из 9 торгующих пар прибыльны.
+- Сигналы только аналитические — **ордера не выставляются. Не является финансовым советом.**
