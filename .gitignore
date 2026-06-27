@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+backend/models/*.joblib
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Databases (local runtime state)
+*.db
+*.sqlite
+*.sqlite3
+
+# Env / OS
+.env
+.DS_Store
